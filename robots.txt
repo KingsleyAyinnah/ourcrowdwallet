@@ -1,0 +1,12 @@
+User-agent: *
+Disallow: /admin/
+Disallow: /api/
+Disallow: /config/
+Disallow: /database/
+Disallow: /includes/
+Disallow: /logs/
+Disallow: /pages/
+Disallow: /vendor/
+Allow: /
+
+Sitemap: https://ourcr.online/sitemap.xml

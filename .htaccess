@@ -1,0 +1,94 @@
+Options -Indexes
+Options -MultiViews
+
+# Security Headers
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://fonts.googleapis.com https://fonts.gstatic.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com; img-src 'self' data: https:; connect-src 'self';"
+</IfModule>
+
+# Block access to sensitive files
+<FilesMatch "\.(env|log|sql|json|lock|sh|bak|htpasswd)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Block access to directories
+<FilesMatch "^(config|database|includes|logs|vendor)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Prevent access to dot files
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# Enable Rewrite Engine
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Redirect to HTTPS (uncomment in production)
+    # RewriteCond %{HTTPS} off
+    # RewriteRule ^(.*)$ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+
+    # Allow direct access to real files and directories
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Block direct PHP file access
+    RewriteRule ^pages/ - [F,L]
+    RewriteRule ^includes/ - [F,L]
+    RewriteRule ^config/ - [F,L]
+    RewriteRule ^database/ - [F,L]
+
+    # Admin routes
+    RewriteRule ^admin/?$ admin/index.php [L,QSA]
+    RewriteRule ^admin/([a-zA-Z0-9_-]+)/?$ admin/index.php?page=$1 [L,QSA]
+    RewriteRule ^admin/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_-]+)/?$ admin/index.php?page=$1&action=$2 [L,QSA]
+
+    # API routes
+    RewriteRule ^api/([a-zA-Z0-9_/-]+)/?$ api/index.php?endpoint=$1 [L,QSA]
+
+    # User routes - catch-all
+    RewriteRule ^([a-zA-Z0-9_-]+)/?$ index.php?page=$1 [L,QSA]
+    RewriteRule ^$ index.php [L,QSA]
+</IfModule>
+
+# PHP Configuration
+<IfModule mod_php.c>
+    php_value upload_max_filesize 10M
+    php_value post_max_size 10M
+    php_value max_execution_time 60
+    php_value max_input_vars 3000
+    php_flag display_errors Off
+    php_flag log_errors On
+</IfModule>
+
+# Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Browser Caching
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/svg+xml "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType text/javascript "access plus 1 month"
+    ExpiresByType application/font-woff "access plus 1 year"
+    ExpiresByType application/font-woff2 "access plus 1 year"
+</IfModule>

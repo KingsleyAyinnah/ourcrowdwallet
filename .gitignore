@@ -1,0 +1,19 @@
+# Environment & local credentials
+config/config.php
+config/gaps.php
+config/mail.php
+config/vtpass.php
+.env
+
+# Dependencies & logs
+vendor/
+logs/*
+!logs/.gitkeep
+scratch/
+test_curl.php
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
