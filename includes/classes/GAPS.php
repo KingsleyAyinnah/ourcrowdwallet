@@ -379,24 +379,30 @@ class GAPS
 
         if ($isGTB) {
             $xmlPayload = "
-  <accountNo>{$encAccNo}</accountNo> 
-  <customerid>{$encAccess}</customerid>   
-  <username>{$encUser}</username>   
-  <password>{$encPass}</password>   
-  <channel>{$channel}</channel>";
+<accountNo>{$encAccNo}</accountNo>
+<customerid>{$encAccess}</customerid>
+<username>{$encUser}</username>
+<password>{$encPass}</password>
+<channel>{$channel}</channel>";
             $response = self::sendXmlRequest($xmlPayload, 'GetAccountInGTB_Enc');
         } else {
             $xmlPayload = "
-  <accountNo>{$encAccNo}</accountNo> 
-  <bankcode>{$bankCode}</bankcode>
-  <customerid>{$encAccess}</customerid>   
-  <username>{$encUser}</username>   
-  <password>{$encPass}</password>   
-  <channel>{$channel}</channel>";
+<accountNo>{$encAccNo}</accountNo>
+<bankcode>{$bankCode}</bankcode>
+<customerid>{$encAccess}</customerid>
+<username>{$encUser}</username>
+<password>{$encPass}</password>
+<channel>{$channel}</channel>";
             $response = self::sendXmlRequest($xmlPayload, 'GetAccountInOtherBank_Enc');
         }
 
         if (!$response['success']) {
+            writeLog(LOG_CHAN_GAPS, 'error', 'GAPS account resolve request failed before parsing.', [
+                'bank_name' => $bankName,
+                'account_number' => $accountNumber,
+                'action' => $isGTB ? 'GetAccountInGTB_Enc' : 'GetAccountInOtherBank_Enc',
+                'gaps_response' => $response,
+            ]);
             return $response;
         }
 
@@ -414,14 +420,31 @@ class GAPS
                     ];
                 }
             }
-            
+
             $msg = trim((string)($parsed['message'] ?? $parsed['description'] ?? 'Account validation failed'));
             $msg = ltrim($msg, ' :'); // Strip leading spaces/colons
+
+            writeLog(LOG_CHAN_GAPS, 'error', 'GAPS account resolve returned non-success response.', [
+                'bank_name' => $bankName,
+                'account_number' => $accountNumber,
+                'action' => $isGTB ? 'GetAccountInGTB_Enc' : 'GetAccountInOtherBank_Enc',
+                'response_code' => $code,
+                'response_message' => $msg,
+                'raw_response' => $response['raw'],
+            ]);
+
             return [
                 'success' => false,
                 'message' => $msg . ' (Code ' . $code . ')'
             ];
         } catch (\Throwable $e) {
+            writeLog(LOG_CHAN_GAPS, 'error', 'Failed to parse GAPS account resolve response.', [
+                'bank_name' => $bankName,
+                'account_number' => $accountNumber,
+                'action' => $isGTB ? 'GetAccountInGTB_Enc' : 'GetAccountInOtherBank_Enc',
+                'exception' => $e->getMessage(),
+                'raw_response' => $response['raw'],
+            ]);
             return [
                 'success' => false,
                 'message' => 'Failed to parse GAPS validation response: ' . $e->getMessage()
@@ -443,13 +466,13 @@ class GAPS
         // Wrap in SOAP envelope if targeting .asmx WebService
         if (str_contains($endpoint, '.asmx') || str_contains($endpoint, 'FileUploader')) {
             $soapBody = "<?xml version=\"1.0\" encoding=\"utf-8\"?>
-<soap:Envelope xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\" xmlns:xsd=\"http://www.w3.org/2001/XMLSchema\" xmlns:soap=\"http://schemas.xmlsoap.org/soap/envelope/\">
-  <soap:Body>
+<Envelope xmlns=\"http://schemas.xmlsoap.org/soap/envelope/\">
+  <Body>
     <{$actionName} xmlns=\"http://tempuri.org/GAPS_Uploader/FileUploader\">
       {$xmlPayload}
     </{$actionName}>
-  </soap:Body>
-</soap:Envelope>";
+  </Body>
+</Envelope>";
             $headers = [
                 'Content-Type: text/xml; charset=utf-8',
                 'SOAPAction: "http://tempuri.org/GAPS_Uploader/FileUploader/' . $actionName . '"',

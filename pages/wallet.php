@@ -96,7 +96,7 @@ include INCLUDES_PATH . '/header.php';
                         <div class="card border-0 shadow-sm rounded-16 mb-4 border-start border-4 border-warning">
                             <div class="card-body p-4">
                                 <h5 class="card-title fw-bold mb-3 text-warning"><i class="fas fa-clock me-2"></i> Pending Deposit Intents</h5>
-                                <p class="small text-muted">You declared bank deposits below. We are polling the GAPS network statement to match it automatically.</p>
+                                <p class="small text-muted">You declared bank deposits below. Our automated system verifies incoming bank transfers to credit your wallet automatically.</p>
                                 <div class="table-responsive">
                                     <table class="table table-borderless align-middle mb-0">
                                         <thead>
@@ -267,9 +267,9 @@ include INCLUDES_PATH . '/header.php';
                         <div class="card-body p-4">
                             <h5 class="fw-bold mb-3">Deposit Guidelines</h5>
                             <ol class="small text-muted ps-3">
-                                <li class="mb-2">Click <strong>Fund Wallet</strong> to log your deposit expectation (Sender Name, Amount).</li>
-                                <li class="mb-2">Transfer the exact amount from a bank account bearing your registered name.</li>
-                                <li class="mb-2">The GAPS system polls bank statements and matches the record automatically within a minute.</li>
+                                <li class="mb-2">Click <strong>Fund Wallet</strong> to pre-declare your transfer details (Amount and Sender Account Name).</li>
+                                <li class="mb-2">Transfer the exact declared amount from a bank account matching your registered name.</li>
+                                <li class="mb-2">Our automated verification system checks bank records and credits your wallet automatically within a few minutes.</li>
                             </ol>
                         </div>
                     </div>

@@ -82,13 +82,13 @@ include INCLUDES_PATH . '/header.php';
 
                         <?php if ($intent['status'] === 'pending'): ?>
                             <div class="alert alert-warning py-3 small border-0 mb-0">
-                                <h6 class="fw-bold mb-1"><i class="fas fa-spinner fa-spin me-2"></i>Waiting for Bank Statement matching...</h6>
-                                <p class="mb-0">Please transfer exactly <strong><?= formatMoney($intent['amount']) ?></strong> to the account below. Our automatic matching cron checker polls the GAPS statement API every minute.</p>
+                                <h6 class="fw-bold mb-1"><i class="fas fa-spinner fa-spin me-2"></i>Waiting for transfer verification...</h6>
+                                <p class="mb-0">Please transfer exactly <strong><?= formatMoney($intent['amount']) ?></strong> to the account below. Our automated system checks incoming transfers continuously to credit your wallet.</p>
                             </div>
                         <?php elseif ($intent['status'] === 'matched'): ?>
                             <div class="alert alert-success py-3 small border-0 mb-0">
                                 <h6 class="fw-bold mb-1"><i class="fas fa-check-circle me-2"></i>Matched Successfully!</h6>
-                                <p class="mb-0">Matched against GAPS bank transaction reference <strong><?= e($intent['gaps_reference']) ?></strong> at <?= date('d M Y, h:i A', strtotime($intent['matched_at'])) ?>. Wallet credited.</p>
+                                <p class="mb-0">Matched with bank transfer reference <strong><?= e($intent['gaps_reference']) ?></strong> at <?= date('d M Y, h:i A', strtotime($intent['matched_at'])) ?>. Wallet credited.</p>
                             </div>
                         <?php else: ?>
                             <div class="alert alert-secondary py-3 small border-0 mb-0">

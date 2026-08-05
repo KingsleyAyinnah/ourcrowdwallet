@@ -271,7 +271,7 @@ $allowReg   = setting('allow_registration', '1') === '1';
                             </h2>
                             <div id="faq1" class="accordion-collapse collapse show" data-bs-parent="#faqAccordion">
                                 <div class="accordion-body">
-                                    You fund your wallet by making a manual bank transfer to our company account. Before transferring, navigate to the "Fund Wallet" page to declare your "Deposit Intent" (amount, name, expected time). Our GAPS matching system automatically completes matching and credits you once the payment hits our statements.
+                                    You fund your wallet by making a bank transfer to our corporate account. Before transferring, navigate to the "Fund Wallet" page to declare your "Deposit Intent" (amount and sender name). Our automated system completes verification and credits your wallet as soon as the transfer is received.
                                 </div>
                             </div>
                         </div>
@@ -307,7 +307,7 @@ $allowReg   = setting('allow_registration', '1') === '1';
                             </h2>
                             <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
                                 <div class="accordion-body">
-                                    A Deposit Intent is a pre-declaration by a user stating their plan to transfer money to our bank account. By logging this intent, our system matches the sender name, amount, and time of the credit against GAPS bank statement API records to credit the right user wallet without human intervention.
+                                    A Deposit Intent is a pre-declaration stating your plan to transfer money to our bank account. By logging this intent, our automated system matches the sender name, amount, and time of the transfer to credit your wallet instantly without human intervention.
                                 </div>
                             </div>
                         </div>
@@ -331,7 +331,7 @@ $allowReg   = setting('allow_registration', '1') === '1';
                             </h2>
                             <div id="faq6" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
                                 <div class="accordion-body">
-                                    In case of failed requests, your wallet is automatically refunded. If it remains pending due to network issues, our cron scheduler runs background checks every minute to retry or reverse it. You can also file a ticket directly to support.
+                                    In case of failed requests, your wallet is automatically refunded. If it remains pending due to network issues, our automated background system checks pending transactions continuously to retry or reverse them. You can also file a ticket directly to support.
                                 </div>
                             </div>
                         </div>

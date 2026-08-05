@@ -11,7 +11,7 @@ $user      = currentUser();
 $siteColor = $user['site_color'] ?? setting('site_color', DEFAULT_SITE_COLOR);
 
 // Get current page
-$page = get('page') ? max(1, (int)get('page')) : 1;
+$page = get('p') ? max(1, (int)get('p')) : (get('page') ? max(1, (int)get('page')) : 1);
 
 // Get filters
 $category = get('category') ?: null;
@@ -52,7 +52,7 @@ include INCLUDES_PATH . '/header.php';
 
                 <!-- Filter Bar -->
                 <div class="card border-0 shadow-sm rounded-16 mb-4">
-                    <div class="card-body p-4">
+                    <div class="card-body p-3 p-md-4">
                         <form method="GET" action="<?= APP_URL ?>/transactions" class="row g-3 align-items-end">
                             <div class="col-12 col-sm-6 col-lg-3">
                                 <label for="category" class="form-label small text-muted">Category</label>
@@ -102,7 +102,7 @@ include INCLUDES_PATH . '/header.php';
 
                 <!-- Ledger Cards -->
                 <div class="card border-0 shadow-sm rounded-16 mb-4">
-                    <div class="card-body p-4">
+                    <div class="card-body p-3 p-md-4">
                         <?php if (empty($transactions)): ?>
                             <div class="text-center py-5">
                                 <i class="fas fa-receipt fa-4x text-muted mb-3" style="opacity: 0.3;"></i>
@@ -110,63 +110,125 @@ include INCLUDES_PATH . '/header.php';
                                 <p class="small text-muted mb-0">Try clearing some filters to expand details.</p>
                             </div>
                         <?php else: ?>
-                            <div class="table-responsive">
-                                <table class="table align-middle">
-                                    <thead>
-                                        <tr class="text-muted small">
-                                            <th>Reference</th>
-                                            <th>Category</th>
-                                            <th>Description</th>
-                                            <th>Amount</th>
-                                            <th>Date</th>
-                                            <th>Status</th>
-                                            <th class="text-center">Action</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <?php foreach ($transactions as $txn): ?>
-                                            <?php $isCredit = $txn['type'] === 'credit'; ?>
-                                            <tr>
-                                                <td class="small text-muted font-monospace"><?= e($txn['reference']) ?></td>
-                                                <td>
-                                                    <span class="badge bg-light text-dark fw-bold">
-                                                        <?= ucfirst(str_replace('_', ' ', $txn['category'])) ?>
-                                                    </span>
-                                                </td>
-                                                <td><span class="small"><?= e($txn['description'] ?: '—') ?></span></td>
-                                                <td class="fw-bold <?= $isCredit ? 'text-success' : 'text-danger' ?>">
-                                                    <?= ($isCredit ? '+' : '−') . ' ' . formatMoney($txn['amount'], false) ?>
-                                                </td>
-                                                <td class="small"><?= formatDate($txn['created_at']) ?></td>
-                                                <td>
-                                                    <span class="badge badge-<?= $txn['status'] ?>">
-                                                        <?= ucfirst($txn['status']) ?>
-                                                    </span>
-                                                </td>
-                                                <td class="text-center">
-                                                    <button
-                                                        class="btn btn-sm btn-outline-secondary rounded-pill px-3 txn-view-btn"
-                                                        data-id="<?= $txn['id'] ?>"
-                                                        data-uuid="<?= e($txn['uuid'] ?? '') ?>"
-                                                        data-reference="<?= e($txn['reference']) ?>"
-                                                        data-category="<?= e(ucfirst(str_replace('_', ' ', $txn['category']))) ?>"
-                                                        data-type="<?= e($txn['type']) ?>"
-                                                        data-amount="<?= formatMoney($txn['amount'], false) ?>"
-                                                        data-fee="<?= formatMoney($txn['fee'] ?? 0, false) ?>"
-                                                        data-balance-before="<?= formatMoney($txn['balance_before'] ?? 0, false) ?>"
-                                                        data-balance-after="<?= formatMoney($txn['balance_after'] ?? 0, false) ?>"
-                                                        data-description="<?= e($txn['description'] ?: '—') ?>"
-                                                        data-status="<?= e($txn['status']) ?>"
-                                                        data-date="<?= e(date('d M Y, h:i A', strtotime($txn['created_at']))) ?>"
-                                                        data-token="<?= e($txn['vtpass_token'] ?? '') ?>"
-                                                        title="View Details">
-                                                        <i class="fas fa-eye me-1"></i> View
-                                                    </button>
-                                                </td>
+                            <div class="txn-history-table-wrapper d-none d-md-block">
+                                <div class="txn-history-scroll">
+                                    <table class="table align-middle txn-history-table">
+                                        <thead>
+                                            <tr class="text-muted small">
+                                                <th>Reference</th>
+                                                <th>Category</th>
+                                                <th>Description</th>
+                                                <th>Amount</th>
+                                                <th>Date</th>
+                                                <th>Status</th>
+                                                <th class="text-center">Action</th>
                                             </tr>
-                                        <?php endforeach; ?>
-                                    </tbody>
-                                </table>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ($transactions as $txn): ?>
+                                                <?php $isCredit = $txn['type'] === 'credit'; ?>
+                                                <tr>
+                                                    <td class="small text-muted font-monospace"><?= e($txn['reference']) ?></td>
+                                                    <td>
+                                                        <span class="badge bg-light text-dark fw-bold">
+                                                            <?= ucfirst(str_replace('_', ' ', $txn['category'])) ?>
+                                                        </span>
+                                                    </td>
+                                                    <td><span class="small"><?= e($txn['description'] ?: '—') ?></span></td>
+                                                    <td class="fw-bold <?= $isCredit ? 'text-success' : 'text-danger' ?>">
+                                                        <?= ($isCredit ? '+' : '−') . ' ' . formatMoney($txn['amount'], false) ?>
+                                                    </td>
+                                                    <td class="small"><?= formatDate($txn['created_at']) ?></td>
+                                                    <td>
+                                                        <span class="badge badge-<?= $txn['status'] ?>">
+                                                            <?= ucfirst($txn['status']) ?>
+                                                        </span>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <button
+                                                            class="btn btn-sm btn-outline-secondary rounded-pill px-3 txn-view-btn"
+                                                            data-id="<?= $txn['id'] ?>"
+                                                            data-uuid="<?= e($txn['uuid'] ?? '') ?>"
+                                                            data-reference="<?= e($txn['reference']) ?>"
+                                                            data-category="<?= e(ucfirst(str_replace('_', ' ', $txn['category']))) ?>"
+                                                            data-type="<?= e($txn['type']) ?>"
+                                                            data-amount="<?= formatMoney($txn['amount'], false) ?>"
+                                                            data-fee="<?= formatMoney($txn['fee'] ?? 0, false) ?>"
+                                                            data-balance-before="<?= formatMoney($txn['balance_before'] ?? 0, false) ?>"
+                                                            data-balance-after="<?= formatMoney($txn['balance_after'] ?? 0, false) ?>"
+                                                            data-description="<?= e($txn['description'] ?: '—') ?>"
+                                                            data-status="<?= e($txn['status']) ?>"
+                                                            data-date="<?= e(date('d M Y, h:i A', strtotime($txn['created_at']))) ?>"
+                                                            data-token="<?= e($txn['vtpass_token'] ?? '') ?>"
+                                                            title="View Details">
+                                                            <i class="fas fa-eye me-1"></i> View
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div class="txn-history-mobile-list d-md-none">
+                                <?php foreach ($transactions as $txn): ?>
+                                    <?php
+                                        $isCredit = $txn['type'] === 'credit';
+                                        $iconClass = match ($txn['category']) {
+                                            'deposit' => 'fas fa-arrow-up',
+                                            'withdrawal' => 'fas fa-arrow-down',
+                                            'transfer' => 'fas fa-exchange-alt',
+                                            'airtime' => 'fas fa-phone',
+                                            'data' => 'fas fa-wifi',
+                                            'cable_tv' => 'fas fa-tv',
+                                            'electricity' => 'fas fa-bolt',
+                                            'betting' => 'fas fa-futbol',
+                                            'exam_pin' => 'fas fa-graduation-cap',
+                                            default => 'fas fa-receipt',
+                                        };
+                                        $iconBg = $isCredit ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)';
+                                        $iconColor = $isCredit ? '#10b981' : '#ef4444';
+                                    ?>
+                                    <div class="txn-history-mobile-item">
+                                        <div class="txn-history-mobile-main">
+                                            <div class="txn-history-mobile-icon" style="background-color: <?= $iconBg ?>; color: <?= $iconColor ?>;">
+                                                <i class="<?= $iconClass ?>"></i>
+                                            </div>
+                                            <div class="txn-history-mobile-info">
+                                                <div class="txn-history-mobile-title"><?= e($txn['description'] ?: ucfirst($txn['category'])) ?></div>
+                                                <div class="txn-history-mobile-meta">
+                                                    <span><?= e($txn['reference']) ?></span>
+                                                    <span><?= formatDate($txn['created_at']) ?></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="txn-history-mobile-side">
+                                            <div class="txn-history-mobile-amount <?= $isCredit ? 'text-success' : 'text-danger' ?>">
+                                                <?= ($isCredit ? '+' : '−') . ' ' . formatMoney($txn['amount'], false) ?>
+                                            </div>
+                                            <span class="badge badge-<?= $txn['status'] ?> mt-2"><?= ucfirst($txn['status']) ?></span>
+                                            <button
+                                                class="btn btn-sm btn-outline-secondary rounded-pill px-3 txn-view-btn mt-2"
+                                                data-id="<?= $txn['id'] ?>"
+                                                data-uuid="<?= e($txn['uuid'] ?? '') ?>"
+                                                data-reference="<?= e($txn['reference']) ?>"
+                                                data-category="<?= e(ucfirst(str_replace('_', ' ', $txn['category']))) ?>"
+                                                data-type="<?= e($txn['type']) ?>"
+                                                data-amount="<?= formatMoney($txn['amount'], false) ?>"
+                                                data-fee="<?= formatMoney($txn['fee'] ?? 0, false) ?>"
+                                                data-balance-before="<?= formatMoney($txn['balance_before'] ?? 0, false) ?>"
+                                                data-balance-after="<?= formatMoney($txn['balance_after'] ?? 0, false) ?>"
+                                                data-description="<?= e($txn['description'] ?: '—') ?>"
+                                                data-status="<?= e($txn['status']) ?>"
+                                                data-date="<?= e(date('d M Y, h:i A', strtotime($txn['created_at']))) ?>"
+                                                data-token="<?= e($txn['vtpass_token'] ?? '') ?>"
+                                                title="View Details">
+                                                <i class="fas fa-eye me-1"></i> View
+                                            </button>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
                             </div>
 
                             <!-- Pagination -->
@@ -174,17 +236,17 @@ include INCLUDES_PATH . '/header.php';
                                 <nav aria-label="Page navigation" class="mt-4">
                                     <ul class="pagination justify-content-center">
                                         <li class="page-item <?= !$pagination['has_prev'] ? 'disabled' : '' ?>">
-                                            <a class="page-link" href="<?= APP_URL ?>/transactions?page=<?= $pagination['prev'] ?>&category=<?= e($category) ?>&type=<?= e($type) ?>&status=<?= e($status) ?>" aria-label="Previous">
+                                            <a class="page-link" href="<?= APP_URL ?>/transactions?p=<?= $pagination['prev'] ?>&category=<?= e($category) ?>&type=<?= e($type) ?>&status=<?= e($status) ?>" aria-label="Previous">
                                                 <span aria-hidden="true">&laquo;</span>
                                             </a>
                                         </li>
                                         <?php for ($i = 1; $i <= $pagination['last']; $i++): ?>
                                             <li class="page-item <?= $pagination['current'] === $i ? 'active bg-site-color border-0' : '' ?>">
-                                                <a class="page-link" href="<?= APP_URL ?>/transactions?page=<?= $i ?>&category=<?= e($category) ?>&type=<?= e($type) ?>&status=<?= e($status) ?>"><?= $i ?></a>
+                                                <a class="page-link" href="<?= APP_URL ?>/transactions?p=<?= $i ?>&category=<?= e($category) ?>&type=<?= e($type) ?>&status=<?= e($status) ?>"><?= $i ?></a>
                                             </li>
                                         <?php endfor; ?>
                                         <li class="page-item <?= !$pagination['has_next'] ? 'disabled' : '' ?>">
-                                            <a class="page-link" href="<?= APP_URL ?>/transactions?page=<?= $pagination['next'] ?>&category=<?= e($category) ?>&type=<?= e($type) ?>&status=<?= e($status) ?>" aria-label="Next">
+                                            <a class="page-link" href="<?= APP_URL ?>/transactions?p=<?= $pagination['next'] ?>&category=<?= e($category) ?>&type=<?= e($type) ?>&status=<?= e($status) ?>" aria-label="Next">
                                                 <span aria-hidden="true">&raquo;</span>
                                             </a>
                                         </li>
@@ -503,6 +565,51 @@ include INCLUDES_PATH . '/header.php';
         const element = document.getElementById('txnReceiptCaptureArea');
         if (!element) return;
 
+        function triggerDownload(blob, filename) {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(function () {
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }, 1000);
+        }
+
+        function shareGeneratedFile(blob, filename, mimeType, label) {
+            const file = new File([blob], filename, { type: mimeType });
+            const shareData = {
+                files: [file],
+                title: 'Transaction Receipt',
+                text: 'Transaction Receipt (Ref: ' + reference + ')'
+            };
+
+            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                navigator.share(shareData).catch(function (err) {
+                    console.log('Share cancelled or failed, falling back to download:', err);
+                    triggerDownload(blob, filename);
+                    Swal.fire({
+                        icon: 'info',
+                        title: 'Save to device',
+                        text: label + ' is ready to save locally.',
+                        timer: 2000,
+                        showConfirmButton: false
+                    });
+                });
+            } else {
+                triggerDownload(blob, filename);
+                Swal.fire({
+                    icon: 'info',
+                    title: 'Saved locally',
+                    text: label + ' downloaded to your device.',
+                    timer: 2000,
+                    showConfirmButton: false
+                });
+            }
+        }
+
         // Show SweetAlert2 loading indicator
         Swal.fire({
             title: 'Generating Receipt',
@@ -527,43 +634,7 @@ include INCLUDES_PATH . '/header.php';
                         return;
                     }
                     Swal.close();
-
-                    const filename = 'Receipt_' + reference + '.png';
-                    const file = new File([blob], filename, { type: 'image/png' });
-
-                    const triggerImgDownload = function () {
-                        const url = URL.createObjectURL(blob);
-                        const a = document.createElement('a');
-                        a.href = url;
-                        a.download = filename;
-                        document.body.appendChild(a);
-                        a.click();
-                        setTimeout(function () {
-                            document.body.removeChild(a);
-                            URL.revokeObjectURL(url);
-                        }, 1000);
-
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Downloaded!',
-                            text: 'Receipt image downloaded successfully.',
-                            timer: 2000,
-                            showConfirmButton: false
-                        });
-                    };
-
-                    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-                        navigator.share({
-                            files: [file],
-                            title: 'Transaction Receipt',
-                            text: 'Transaction Receipt (Ref: ' + reference + ')'
-                        }).catch(function (err) {
-                            console.log('Share cancelled or failed, falling back to download:', err);
-                            triggerImgDownload();
-                        });
-                    } else {
-                        triggerImgDownload();
-                    }
+                    shareGeneratedFile(blob, 'Receipt_' + reference + '.png', 'image/png', 'Receipt image');
                 }, 'image/png');
             } else if (format === 'pdf') {
                 const imgData = canvas.toDataURL('image/png');
@@ -581,20 +652,7 @@ include INCLUDES_PATH . '/header.php';
                 pdf.addImage(imgData, 'PNG', 0, 0, widthPt, heightPt, '', 'FAST');
                 const pdfBlob = pdf.output('blob');
                 Swal.close();
-
-                const filename = 'Receipt_' + reference + '.pdf';
-                const file = new File([pdfBlob], filename, { type: 'application/pdf' });
-
-                const triggerPdfDownload = function () {
-                    pdf.save(filename);
-                    Swal.fire({
-                        icon: 'success',
-                        title: 'Downloaded!',
-                        text: 'Receipt PDF downloaded successfully.',
-                        timer: 2000,
-                        showConfirmButton: false
-                    });
-                }
+                shareGeneratedFile(pdfBlob, 'Receipt_' + reference + '.pdf', 'application/pdf', 'Receipt PDF');
             }
         }).catch(function (error) {
             console.error('Error generating receipt:', error);

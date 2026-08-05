@@ -436,7 +436,7 @@ $(document).ready(function() {
                     $('#account_name').val('');
                     var err = (xhr.responseJSON && xhr.responseJSON.message)
                         ? xhr.responseJSON.message
-                        : 'Could not reach the GAPS verification service.';
+                        : 'Could not reach the account verification service.';
                     showAccountAlert('error', err + ' — You can type the account name manually.');
                 },
                 complete: function() {
