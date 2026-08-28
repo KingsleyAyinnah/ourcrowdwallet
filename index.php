@@ -19,7 +19,33 @@ require_once INCLUDES_PATH . '/pagination.php';
 require_once INCLUDES_PATH . '/alerts.php';
 
 // ─── Get requested page ───────────────────────────────────────────────────────
-$page = isset($_GET['page']) ? strtolower(trim($_GET['page'])) : '';
+$page = '';
+
+if (!empty($_SERVER['REQUEST_URI'])) {
+    $requestPath = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
+    $requestPath = trim($requestPath, '/');
+
+    $basePath = trim((string) parse_url(APP_URL, PHP_URL_PATH), '/');
+    if ($basePath !== '') {
+        $basePrefix = $basePath . '/';
+        if (str_starts_with($requestPath, $basePrefix)) {
+            $requestPath = substr($requestPath, strlen($basePrefix));
+        } elseif ($requestPath === $basePath) {
+            $requestPath = '';
+        }
+    }
+
+    $requestPath = trim($requestPath, '/');
+
+    if ($requestPath !== '') {
+        $segments = explode('/', $requestPath);
+        $page = strtolower(preg_replace('/[^a-z0-9_-]/', '', $segments[0]));
+    }
+}
+
+if ($page === '' && isset($_GET['page']) && $_GET['page'] !== '') {
+    $page = strtolower(trim($_GET['page']));
+}
 
 // Strip non-alphanumeric/dash chars for safety
 $page = preg_replace('/[^a-z0-9_-]/', '', $page);

@@ -17,6 +17,20 @@ $openTickets = (int)Database::fetchOne("SELECT COUNT(id) as count FROM support_t
 $todayVolume = (float)Database::fetchOne("SELECT SUM(amount) as sum FROM wallet_transactions WHERE DATE(created_at) = CURDATE() AND status = 'success'")['sum'];
 $todayFees = (float)Database::fetchOne("SELECT SUM(fee) as sum FROM wallet_transactions WHERE DATE(created_at) = CURDATE() AND status = 'success'")['sum'];
 
+// Fetch VTpass API balance
+$vtpassBalance = null;
+$vtpassBalanceError = null;
+try {
+    $vtpassBalResult = Ourcr\VTpass::getLiveBalance();
+    if ($vtpassBalResult['success']) {
+        $vtpassBalance = $vtpassBalResult['data']['balance'] ?? null;
+    } else {
+        $vtpassBalanceError = $vtpassBalResult['message'] ?? 'Could not retrieve balance.';
+    }
+} catch (\Throwable $e) {
+    $vtpassBalanceError = $e->getMessage();
+}
+
 // Get last 10 transactions
 $recentTxns = Database::fetchAll(
     "SELECT wt.*, u.username 
@@ -127,6 +141,19 @@ include ADMIN_PATH . '/includes/header.php';
                     </div>
                     <div class="stat-icon text-info bg-info bg-opacity-10">
                         <i class="fas fa-headset"></i>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-card-left">
+                        <span class="stat-label">VTpass API Balance</span>
+                        <?php if ($vtpassBalance !== null): ?>
+                            <span class="stat-value text-info"><?= formatMoney($vtpassBalance) ?></span>
+                        <?php else: ?>
+                            <span class="stat-value text-muted" title="<?= e($vtpassBalanceError) ?>">Offline</span>
+                        <?php endif; ?>
+                    </div>
+                    <div class="stat-icon text-info bg-info bg-opacity-10">
+                        <i class="fas fa-wallet"></i>
                     </div>
                 </div>
             </div>

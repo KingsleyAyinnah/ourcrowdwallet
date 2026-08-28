@@ -11,8 +11,10 @@ $currentAdminPage = $currentAdminPage ?? '';
 
 $menuGroups = [
     'Main' => [
-        ['slug' => 'dashboard',     'label' => 'Dashboard',         'icon' => 'fas fa-tachometer-alt',  'url' => 'admin/dashboard'],
-        ['slug' => 'income_wallet', 'label' => 'Income Wallet',     'icon' => 'fas fa-wallet',          'url' => 'admin/income-wallet'],
+        ['slug' => 'dashboard',      'label' => 'Dashboard',         'icon' => 'fas fa-tachometer-alt',  'url' => 'admin/dashboard'],
+        ['slug' => 'income_wallet',  'label' => 'Income Wallet',     'icon' => 'fas fa-wallet',          'url' => 'admin/income-wallet'],
+        ['slug' => 'admin_payouts',  'label' => 'Admin Payouts',     'icon' => 'fas fa-paper-plane',     'url' => 'admin/admin-payouts'],
+        ['slug' => 'vtpass_balance', 'label' => 'VTpass Balance',    'icon' => 'fas fa-bolt',            'url' => 'admin/vtpass-balance'],
     ],
     'Users' => [
         ['slug' => 'users',         'label' => 'All Users',          'icon' => 'fas fa-users',            'url' => 'admin/users'],
@@ -55,7 +57,7 @@ $menuGroups = [
 <aside class="admin-sidebar" id="adminSidebar">
     <!-- Logo -->
     <div class="admin-sidebar-header">
-        <a href="<?= APP_URL ?>/admin/dashboard" class="admin-sidebar-logo">
+        <a href="<?= APP_URL ?>/<?= hasRole('support') ? 'admin/support' : 'admin/dashboard' ?>" class="admin-sidebar-logo">
             <img src="<?= APP_URL ?>/assets/images/logo-white.png"
                  alt="<?= e($siteName) ?>"
                  onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
@@ -67,10 +69,18 @@ $menuGroups = [
     <!-- Nav -->
     <nav class="admin-sidebar-nav">
         <?php foreach ($menuGroups as $groupLabel => $items): ?>
+            <?php
+                if (hasRole('support') && $groupLabel !== 'Support') {
+                    continue;
+                }
+            ?>
             <div class="admin-nav-group">
                 <div class="admin-nav-group-label"><?= $groupLabel ?></div>
                 <?php foreach ($items as $item): ?>
                     <?php
+                        if (hasRole('support') && $item['slug'] !== 'support') {
+                            continue;
+                        }
                         // Hide superadmin-only items from regular admins
                         if (!empty($item['superadmin_only']) && !hasRole('superadmin')) continue;
                         $active = ($currentAdminPage === $item['slug']) ? ' active' : '';
@@ -83,12 +93,14 @@ $menuGroups = [
             </div>
         <?php endforeach; ?>
 
-        <div class="admin-nav-group">
-            <a href="<?= APP_URL ?>/dashboard" class="admin-nav-link" target="_blank">
-                <i class="fas fa-external-link-alt admin-nav-icon"></i>
-                <span>View Site</span>
-            </a>
-        </div>
+        <?php if (!hasRole('support')): ?>
+            <div class="admin-nav-group">
+                <a href="<?= APP_URL ?>/dashboard" class="admin-nav-link" target="_blank">
+                    <i class="fas fa-external-link-alt admin-nav-icon"></i>
+                    <span>View Site</span>
+                </a>
+            </div>
+        <?php endif; ?>
     </nav>
 
     <!-- Sidebar Footer -->

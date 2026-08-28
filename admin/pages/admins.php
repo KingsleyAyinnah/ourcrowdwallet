@@ -28,7 +28,10 @@ if (isPost()) {
             $username  = sanitizeString(post('username'));
             $phone     = sanitizeString(post('phone'));
             $password  = post('password');
-            $role      = post('role') === 'superadmin' ? 'superadmin' : 'admin';
+            $role      = post('role');
+            if (!in_array($role, ['superadmin', 'admin', 'support'], true)) {
+                $role = 'admin';
+            }
 
             // Basic validation
             if (empty($firstName) || empty($lastName) || empty($email) || empty($username) || empty($phone) || empty($password)) {
@@ -128,7 +131,7 @@ $adminsList = Database::fetchAll(
     "SELECT id, uuid, first_name, last_name, username, email, phone,
             role, status, last_login_at, created_at
      FROM users
-     WHERE role IN ('admin', 'superadmin') AND deleted_at IS NULL
+     WHERE role IN ('admin', 'superadmin', 'support') AND deleted_at IS NULL
      ORDER BY role DESC, created_at ASC"
 );
 
@@ -208,6 +211,8 @@ include ADMIN_PATH . '/includes/header.php';
                                     <td>
                                         <?php if ($adm['role'] === 'superadmin'): ?>
                                             <span class="badge" style="background:#4f46e5;color:#fff;">Superadmin</span>
+                                        <?php elseif ($adm['role'] === 'support'): ?>
+                                            <span class="badge bg-info text-white">Support</span>
                                         <?php else: ?>
                                             <span class="badge bg-secondary">Admin</span>
                                         <?php endif; ?>
@@ -337,6 +342,7 @@ include ADMIN_PATH . '/includes/header.php';
                             <select class="form-select" name="role">
                                 <option value="admin" selected>Admin — full access except managing admins</option>
                                 <option value="superadmin">Superadmin — unrestricted access</option>
+                                <option value="support">Support — access to support portal only</option>
                             </select>
                         </div>
                     </div>

@@ -261,7 +261,8 @@ $servicesConfig = [
         'rate_str' => '1.10%',
         'cap_str' => '—',
         'match' => function($txn) {
-            return str_contains(strtolower($txn['service_id']), 'phed');
+            $sid = strtolower($txn['service_id'] ?? '');
+            return str_contains($sid, 'phed') || str_contains($sid, 'portharcourt');
         },
         'calculator' => function($amount, $qty) {
             return $amount * 0.011;
@@ -338,7 +339,9 @@ $servicesConfig = [
         'rate_str' => '₦150.00 (Flat)',
         'cap_str' => '—',
         'match' => function($txn) {
-            return strtolower($txn['service_id']) === 'waec' && (str_contains(strtolower($txn['variation_code'] ?? ''), 'registration') || str_contains(strtolower($txn['variation_code'] ?? ''), 'register'));
+            $sid = strtolower($txn['service_id'] ?? '');
+            $var = strtolower($txn['variation_code'] ?? '');
+            return $sid === 'waec-registration' || str_contains($sid, 'waec-reg') || ($sid === 'waec' && (str_contains($var, 'registration') || str_contains($var, 'register')));
         },
         'calculator' => function($amount, $qty) {
             return 150.00 * max(1, $qty);
@@ -349,10 +352,24 @@ $servicesConfig = [
         'rate_str' => '₦250.00 (Flat)',
         'cap_str' => '—',
         'match' => function($txn) {
-            return strtolower($txn['service_id']) === 'waec' && (!str_contains(strtolower($txn['variation_code'] ?? ''), 'registration') && !str_contains(strtolower($txn['variation_code'] ?? ''), 'register'));
+            $sid = strtolower($txn['service_id'] ?? '');
+            $var = strtolower($txn['variation_code'] ?? '');
+            return ($sid === 'waec' || str_contains($sid, 'waec-direct') || str_contains($sid, 'waec-result')) && !str_contains($var, 'registration') && !str_contains($var, 'register');
         },
         'calculator' => function($amount, $qty) {
             return 250.00 * max(1, $qty);
+        }
+    ],
+    'jamb' => [
+        'name' => 'JAMB e-PIN',
+        'rate_str' => '₦100.00 (Flat)',
+        'cap_str' => '—',
+        'match' => function($txn) {
+            $sid = strtolower($txn['service_id'] ?? '');
+            return str_contains($sid, 'jamb');
+        },
+        'calculator' => function($amount, $qty) {
+            return 100.00 * max(1, $qty);
         }
     ],
     'international_airtime' => [
@@ -493,6 +510,21 @@ $totalTransferred = (float)Database::fetchOne(
 
 $availableBalance = $overallIncome - $totalDevPaid - $totalTransferred;
 
+// ─── 3.1.5 Fetch Live VTpass API Balance ───
+$vtpassBalance = null;
+$vtpassBalanceError = null;
+try {
+    $vtpassBalResult = Ourcr\VTpass::getLiveBalance();
+    if ($vtpassBalResult['success']) {
+        $vtpassBalance = $vtpassBalResult['data']['balance'] ?? null;
+    } else {
+        $vtpassBalanceError = $vtpassBalResult['message'] ?? 'Could not retrieve balance.';
+    }
+} catch (\Throwable $e) {
+    $vtpassBalanceError = $e->getMessage();
+    writeLog(LOG_CHAN_VTPASS, 'error', 'Failed to fetch VTpass live balance for admin panel: ' . $e->getMessage());
+}
+
 // ─── 3.2 POST Handler for Admin Income Transfer ───
 $error = '';
 if (isPost()) {
@@ -543,10 +575,129 @@ if (isPost()) {
                 Database::rollback();
                 throw $ex;
             }
+        } elseif ($action === 'transfer_income_external') {
+            $bankName      = sanitizeString(post('ext_bank_name'));
+            $accountNumber = sanitizeString(post('ext_account_no'));
+            $accountName   = sanitizeString(post('ext_account_name'));
+            $amount        = (float)post('ext_amount');
+            $narrative     = sanitizeString(post('ext_narrative'));
+            $password      = post('password');
+
+            $currentAdmin = Ourcr\User::findById(currentUserId());
+            if (!$currentAdmin || !verifyPassword($password, $currentAdmin['password_hash'])) {
+                throw new Exception("Invalid confirmation password.");
+            }
+
+            if ($amount <= 0) {
+                throw new Exception("Transfer amount must be greater than zero.");
+            }
+
+            if ($amount > $availableBalance) {
+                throw new Exception("Insufficient admin income balance. (Available: ₦" . number_format($availableBalance, 2) . ")");
+            }
+
+            if (empty($bankName) || empty($accountNumber) || empty($accountName)) {
+                throw new Exception("Please select a bank, enter a 10-digit account number, and provide the recipient account name.");
+            }
+
+            $cbnBankCode = \Ourcr\GAPS\GAPS::getBankCodeByName($bankName);
+            if (empty($cbnBankCode)) {
+                $cbnBankCode = '044';
+            }
+
+            $reference = 'ADM_PAY_' . date('ymdHis') . '_' . rand(1000, 9999);
+
+            // Execute GTBank GAPS Outward Transfer
+            $gapsRes = \Ourcr\GAPS\GAPS::processWithdrawal(
+                accountNumber: $accountNumber,
+                accountName:   $accountName,
+                bankCode:      $cbnBankCode,
+                amount:        $amount,
+                reference:     $reference,
+                narration:     $narrative,
+                bankName:      $bankName
+            );
+
+            $requeryRes = null;
+            $isSuccess  = false;
+            $finalMessage = $gapsRes['message'] ?? 'Admin Payout Failed';
+            $finalCode    = (string)($gapsRes['code'] ?? '');
+
+            $isNetworkTimeout = in_array($finalCode, ['NETWORK_ERROR', 'TIMEOUT', 'CURL_ERROR', '0', '504', '502'], true) 
+                || str_contains(strtolower($finalMessage), 'timed out') 
+                || str_contains(strtolower($finalMessage), 'curl error');
+
+            if (!empty($gapsRes['success']) || $isNetworkTimeout || $finalCode === '1010') {
+                if ($isNetworkTimeout || $finalCode === '1010') {
+                    sleep(3);
+                }
+                // Immediate Requery Status Verification
+                $requeryRes = \Ourcr\GAPS\GAPS::requeryTransaction($reference);
+                $isSuccess    = !empty($requeryRes['success']);
+                $finalMessage = $requeryRes['message'] ?? $finalMessage;
+                $finalCode    = (string)($requeryRes['code'] ?? $finalCode);
+
+                if (!$isSuccess && $finalCode === '1010') {
+                    sleep(3);
+                    $requeryRes2 = \Ourcr\GAPS\GAPS::requeryTransaction($reference);
+                    if (!empty($requeryRes2['success'])) {
+                        $requeryRes   = $requeryRes2;
+                        $isSuccess    = true;
+                        $finalMessage = $requeryRes2['message'] ?? $finalMessage;
+                        $finalCode    = (string)($requeryRes2['code'] ?? '1000');
+                    }
+                }
+            } else {
+                $isSuccess = false;
+            }
+
+            $metaData     = [
+                'single_transfer' => $gapsRes['data'] ?? [],
+                'requery'         => $requeryRes['data'] ?? [],
+                'code'            => $finalCode,
+                'message'         => $finalMessage
+            ];
+
+            if ($isSuccess) {
+                Database::insert(
+                    "INSERT INTO wallet_transactions (uuid, user_id, amount, fee, balance_before, balance_after, type, category, status, reference, description, meta, created_at)
+                     VALUES (?, ?, ?, 0, 0, 0, 'debit', 'admin_payout', 'success', ?, ?, ?, NOW())",
+                    [
+                        generateUUID(),
+                        currentUserId(),
+                        $amount,
+                        $reference,
+                        "External Admin Income Payout via GAPS to {$bankName} - {$accountName} ({$accountNumber}) - {$narrative} - Verified via Requery",
+                        json_encode($metaData)
+                    ]
+                );
+                auditLog('ADMIN_INCOME_EXTERNAL_TRANSFER', "Transferred ₦$amount of admin income via GAPS to {$accountName} ({$accountNumber}, {$bankName}). Verified Ref: $reference", 'wallet_transactions', 0);
+                setFlash('success', "GAPS Payout of ₦" . number_format($amount, 2) . " to {$accountName} ({$accountNumber}, {$bankName}) successfully verified and executed! (Ref: {$reference})");
+                redirectTo('admin/income-wallet');
+            } else {
+                Database::insert(
+                    "INSERT INTO wallet_transactions (uuid, user_id, amount, fee, balance_before, balance_after, type, category, status, reference, description, meta, created_at)
+                     VALUES (?, ?, ?, 0, 0, 0, 'debit', 'admin_payout', 'failed', ?, ?, ?, NOW())",
+                    [
+                        generateUUID(),
+                        currentUserId(),
+                        $amount,
+                        $reference,
+                        "Failed External Admin Income Payout: {$finalMessage}" . ($finalCode ? " [Code: {$finalCode}]" : ""),
+                        json_encode($metaData)
+                    ]
+                );
+                auditLog('ADMIN_INCOME_EXTERNAL_TRANSFER_FAILED', "External Admin Income Payout of ₦$amount to {$accountName} ({$accountNumber}, {$bankName}) failed via Requery: {$finalMessage}. Ref: $reference", 'wallet_transactions', 0);
+                throw new Exception("GAPS Payout Failed (Requery Verification): {$finalMessage}" . ($finalCode ? " (Code: {$finalCode})" : ""));
+            }
         }
-    } catch (Exception $e) {
+    } catch (\Throwable $e) {
         $error = $e->getMessage();
     }
+}
+
+if (!empty($error)) {
+    $adminPageScripts = "Swal.fire({icon: 'error', title: 'GAPS Payout Error', text: " . json_encode($error) . ", confirmButtonColor: '#4f46e5'});";
 }
 
 // ─── 4. Chart Data Preparation ───
@@ -624,16 +775,16 @@ include ADMIN_PATH . '/includes/header.php';
 
             <!-- Statistics Spotlight cards -->
             <div class="row g-3 mb-4">
-                <div class="col-xl-4 col-md-6">
-                    <div class="card border-0 shadow-sm rounded-16 p-4 position-relative overflow-hidden bg-gradient-earnings text-white" style="height: 140px;">
+                <div class="col-xl-3 col-md-6">
+                    <div class="card border-0 shadow-sm rounded-16 p-4 position-relative overflow-hidden border-start border-4 border-dark bg-white" style="height: 140px;">
                         <div class="position-relative z-index-2">
-                            <span class="small text-white-50 mb-1 d-block font-semibold uppercase tracking-wider">Lifetime Total Earnings</span>
-                            <h2 class="fw-bold mb-0 text-white"><?= formatMoney($overallIncome) ?></h2>
-                            <i class="fas fa-wallet position-absolute end-0 bottom-0 text-white-10 fs-1"></i>
+                            <span class="small text-muted mb-1 d-block font-semibold uppercase tracking-wider text-dark">Lifetime Total Earnings</span>
+                            <h2 class="fw-bold mb-0 text-dark"><?= formatMoney($overallIncome) ?></h2>
+                            <p class="small text-muted mb-0 mt-2">Cumulative gross earnings</p>
                         </div>
                     </div>
                 </div>
-                <div class="col-xl-4 col-md-6">
+                <div class="col-xl-3 col-md-6">
                     <div class="card border-0 shadow-sm rounded-16 p-4 position-relative overflow-hidden border-start border-4 border-warning bg-white" style="height: 140px;">
                         <div class="position-relative z-index-2">
                             <span class="small text-muted mb-1 d-block font-semibold uppercase tracking-wider text-warning">Developer Income (5%)</span>
@@ -643,21 +794,43 @@ include ADMIN_PATH . '/includes/header.php';
                         </div>
                     </div>
                 </div>
-                <div class="col-xl-4 col-md-6">
-                    <div class="card border-0 shadow-sm rounded-16 p-4 position-relative overflow-hidden border-start border-4 border-primary bg-white" style="height: 140px;">
-                        <div class="position-relative z-index-2">
-                            <div class="d-flex justify-content-between align-items-start">
-                                <div>
-                                    <span class="small text-muted mb-1 d-block font-semibold uppercase tracking-wider text-primary">Available Admin Balance</span>
-                                    <h2 class="fw-bold mb-0 text-dark"><?= formatMoney($availableBalance) ?></h2>
+                <div class="col-xl-3 col-md-6">
+                    <a href="<?= APP_URL ?>/admin/admin-payouts" class="text-decoration-none">
+                        <div class="card border-0 shadow-sm rounded-16 p-4 position-relative overflow-hidden border-start border-4 border-primary bg-white card-hover-shadow" style="height: 140px; cursor: pointer;">
+                            <div class="position-relative z-index-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div>
+                                        <span class="small text-muted mb-1 d-block font-semibold uppercase tracking-wider text-primary">Available Admin Balance</span>
+                                        <h2 class="fw-bold mb-0 text-dark"><?= formatMoney($availableBalance) ?></h2>
+                                    </div>
+                                    <span class="badge bg-primary text-white rounded-pill px-3 py-1.5 small font-semibold">
+                                        <i class="fas fa-paper-plane me-1"></i> Manage Payouts
+                                    </span>
                                 </div>
-                                <button class="btn btn-sm btn-primary rounded-8 px-3 py-2 font-semibold" style="background:#4f46e5; border:none;" data-bs-toggle="modal" data-bs-target="#transferIncomeModal">
-                                    <i class="fas fa-paper-plane me-1"></i> Transfer
-                                </button>
+                                <p class="small text-muted mb-0 mt-2">Transferred to date: <span class="fw-bold"><?= formatMoney($totalTransferred) ?></span></p>
                             </div>
-                            <p class="small text-muted mb-0 mt-2">Transferred to date: <span class="fw-bold"><?= formatMoney($totalTransferred) ?></span></p>
                         </div>
-                    </div>
+                    </a>
+                </div>
+                <div class="col-xl-3 col-md-6">
+                    <a href="<?= APP_URL ?>/admin/vtpass-balance" class="text-decoration-none">
+                        <div class="card border-0 shadow-sm rounded-16 p-4 position-relative overflow-hidden border-start border-4 border-info bg-white card-hover-shadow" style="height: 140px; cursor: pointer;">
+                            <div class="position-relative z-index-2">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <span class="small text-muted mb-1 d-block font-semibold uppercase tracking-wider text-info">VTpass API Balance</span>
+                                    <span class="badge bg-light-info text-info rounded-pill px-2 py-1 small" style="font-size:10px;"><i class="fas fa-cog me-1"></i>Manage</span>
+                                </div>
+                                <?php if ($vtpassBalance !== null): ?>
+                                    <h2 class="fw-bold mb-0 text-dark"><?= formatMoney($vtpassBalance) ?></h2>
+                                    <p class="small text-success mb-0 mt-2"><i class="fas fa-check-circle me-1"></i> Live Connection Active</p>
+                                <?php else: ?>
+                                    <h2 class="fw-bold mb-0 text-muted">₦0.00</h2>
+                                    <p class="small text-danger mb-0 mt-2" title="<?= e($vtpassBalanceError) ?>"><i class="fas fa-times-circle me-1"></i> Connection Offline</p>
+                                <?php endif; ?>
+                                <span class="small text-muted font-monospace" style="font-size: 11px;">VTpass Float Account</span>
+                            </div>
+                        </div>
+                    </a>
                 </div>
             </div>
 
@@ -959,102 +1132,3 @@ $(document).ready(function() {
 });
 </script>
 <?php endif; ?>
-
-<!-- Modal: Transfer Admin Income -->
-<div class="modal fade" id="transferIncomeModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content rounded-16 border-0 shadow-lg">
-            <div class="modal-header border-bottom p-4">
-                <h5 class="modal-title fw-bold"><i class="fas fa-paper-plane me-2 text-primary"></i>Transfer Admin Income</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <form method="POST" action="<?= APP_URL ?>/admin/income-wallet">
-                <?= csrfField() ?>
-                <input type="hidden" name="action" value="transfer_income">
-
-                <div class="modal-body p-4">
-                    <div class="alert alert-warning py-2 px-3 small rounded-8 mb-3">
-                        <i class="fas fa-exclamation-triangle me-1"></i> Transfers will immediately credit the target user's wallet. This action is irreversible.
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="recipient" class="form-label small">Recipient Username or Email</label>
-                        <input type="text" class="form-control" id="recipient" name="recipient" placeholder="e.g. john_doe" autocomplete="off" required>
-                        <div id="recipient-chip-container" class="mt-2" style="display: none;">
-                            <span class="badge px-3 py-2 rounded-pill border d-inline-flex align-items-center gap-1.5" style="background: rgba(79, 70, 229, 0.08); color: #4f46e5; border-color: rgba(79, 70, 229, 0.2); font-size: 13px; font-weight: 600;">
-                                <i class="fas fa-user-check"></i>
-                                <span id="recipient-full-name"></span>
-                            </span>
-                        </div>
-                        <div id="recipient-error" class="small text-danger mt-1" style="display: none;">
-                            <i class="fas fa-times-circle me-1"></i> User not found
-                        </div>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="amount" class="form-label small">Amount to Transfer (₦)</label>
-                        <input type="number" class="form-control" id="amount" name="amount" step="0.01" max="<?= $availableBalance ?>" placeholder="Max: <?= number_format($availableBalance, 2, '.', '') ?>" required>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="narrative" class="form-label small">Transfer Narrative / Reason</label>
-                        <input type="text" class="form-control" id="narrative" name="narrative" placeholder="e.g. Platform promotion payouts" required>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="password" class="form-label small">Confirm Your Admin Password</label>
-                        <input type="password" class="form-control" id="password" name="password" required>
-                    </div>
-                </div>
-
-                <div class="modal-footer border-0 p-4 pt-0">
-                    <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary" style="background-color: #4f46e5; border: none;">Execute Transfer</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
-
-<script>
-$(document).ready(function() {
-    let debounceTimer;
-    const recipientInput = document.getElementById('recipient');
-    const chipContainer = document.getElementById('recipient-chip-container');
-    const fullNameSpan = document.getElementById('recipient-full-name');
-    const errorContainer = document.getElementById('recipient-error');
-
-    if (recipientInput) {
-        recipientInput.addEventListener('input', function() {
-            clearTimeout(debounceTimer);
-            const query = recipientInput.value.trim();
-
-            if (query.length < 2) {
-                chipContainer.style.display = 'none';
-                errorContainer.style.display = 'none';
-                return;
-            }
-
-            debounceTimer = setTimeout(() => {
-                fetch('<?= APP_URL ?>/admin/income-wallet?action=lookup_user&query=' + encodeURIComponent(query))
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            fullNameSpan.textContent = data.name + ' (@' + data.username + ')';
-                            chipContainer.style.display = 'inline-block';
-                            errorContainer.style.display = 'none';
-                        } else {
-                            chipContainer.style.display = 'none';
-                            errorContainer.style.display = 'block';
-                        }
-                    })
-                    .catch(err => {
-                        console.error('User lookup error:', err);
-                        chipContainer.style.display = 'none';
-                        errorContainer.style.display = 'none';
-                    });
-            }, 300); // 300ms debounce
-        });
-    }
-});
-</script>

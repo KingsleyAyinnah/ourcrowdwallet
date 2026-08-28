@@ -18,11 +18,11 @@ $withdrawalFeePercent = (float)setting('withdrawal_fee', 1.5);
 $error   = '';
 $success = '';
 
-// Fetch last 10 distinct successful beneficiaries for this user
+// Fetch last 10 distinct beneficiaries for this user (successful, processing, pending, or failed)
 $beneficiaries = Database::fetchAll(
     "SELECT account_number, account_name, bank_name, MAX(created_at) as last_used
      FROM withdrawals
-     WHERE user_id = ? AND status = 'success'
+     WHERE user_id = ? AND status != 'reversed'
      GROUP BY account_number, account_name, bank_name
      ORDER BY last_used DESC
      LIMIT 10",
@@ -36,6 +36,13 @@ if ($withdrawalResult) {
     // Refresh balance after successful withdrawal
     $balance = getWalletBalance($user['id']);
 }
+
+$oldAmount      = getOldInput('amount');
+$oldBank        = getOldInput('bank_name');
+$oldAccountNo   = getOldInput('account_number');
+$oldAccountName = getOldInput('account_name');
+$oldRemark      = getOldInput('remark');
+clearOldInputs();
 
 // Handle POST: Process Withdrawal
 if (isPost()) {
@@ -52,18 +59,23 @@ if (isPost()) {
         $withdrawalFee = round(($amount * $withdrawalFeePercent) / 100, 2);
 
         if ($amount < $minWithdrawal || $amount > $maxWithdrawal) {
+            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'account_name' => post('account_name'), 'remark' => post('remark')]);
             setFlash('error', 'Withdrawal amount must be between ' . formatMoney($minWithdrawal) . ' and ' . formatMoney($maxWithdrawal) . '.');
             redirectTo('withdraw');
         } elseif (empty($bankName) || empty($accountNo) || empty($accountName)) {
+            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'account_name' => post('account_name'), 'remark' => post('remark')]);
             setFlash('error', 'All bank details are required.');
             redirectTo('withdraw');
         } elseif (empty($txnPin)) {
+            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'account_name' => post('account_name'), 'remark' => post('remark')]);
             setFlash('error', 'Transaction PIN is required.');
             redirectTo('withdraw');
         } elseif (!Ourcr\Wallet::verifyPin($user['id'], $txnPin)) {
+            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'account_name' => post('account_name'), 'remark' => post('remark')]);
             setFlash('error', 'Invalid transaction security PIN. Please try again.');
             redirectTo('withdraw');
         } elseif ($balance < ($amount + $withdrawalFee)) {
+            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'account_name' => post('account_name'), 'remark' => post('remark')]);
             setFlash('error', 'Insufficient balance. You need ' . formatMoney($amount + $withdrawalFee) . ' (including ' . formatMoney($withdrawalFee) . ' withdrawal fee).');
             redirectTo('withdraw');
         } else {
@@ -93,6 +105,7 @@ if (isPost()) {
                     ];
                     redirectTo('withdraw');
                 } else {
+                    setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'account_name' => post('account_name'), 'remark' => post('remark')]);
                     setFlash('error', $result['message']);
                     redirectTo('withdraw');
                 }
@@ -152,6 +165,7 @@ include INCLUDES_PATH . '/header.php';
                                    name="amount" 
                                    min="<?= $minWithdrawal ?>" 
                                    max="<?= $maxWithdrawal ?>" 
+                                   value="<?= e($oldAmount) ?>"
                                    placeholder="Min: <?= $minWithdrawal ?>" 
                                    required>
                             <div class="form-text small">Standard transfer fee: <strong><?= e($withdrawalFeePercent) ?>%</strong> will be deducted.</div>
@@ -183,6 +197,7 @@ include INCLUDES_PATH . '/header.php';
                                    id="account_number" 
                                    name="account_number" 
                                    maxlength="10" 
+                                   value="<?= e($oldAccountNo) ?>"
                                    placeholder="10-digit number" 
                                    required>
                         </div>
@@ -193,7 +208,7 @@ include INCLUDES_PATH . '/header.php';
                             <div class="custom-bank-dropdown" id="bankDropdownWrapper" style="position:relative;">
                                 <button type="button" id="bankDropdownBtn" class="custom-bank-toggle"
                                         style="width:100%; background:#fff; border:1px solid #ced4da; color:#4b5563; padding:0.5rem 0.75rem; border-radius:8px; text-align:left; display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-                                    <span id="bankDropdownLabel">Select Bank</span>
+                                    <span id="bankDropdownLabel"><?= e(!empty($oldBank) ? $oldBank : 'Select Bank') ?></span>
                                     <i class="fas fa-chevron-down" style="font-size:12px;"></i>
                                 </button>
                                 <div id="bankDropdownPanel" style="display:none; position:absolute; z-index:9999; background:#fff; border:1px solid #ced4da; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.12); padding:12px; width:100%; max-height:280px; overflow:hidden; margin-top:2px;">
@@ -236,7 +251,7 @@ include INCLUDES_PATH . '/header.php';
                                         <div class="bank-option" data-value="Zenith Bank">Zenith Bank</div>
                                     </div>
                                 </div>
-                                <input type="hidden" name="bank_name" id="selected_bank_name" required>
+                                <input type="hidden" name="bank_name" id="selected_bank_name" value="<?= e($oldBank) ?>" required>
                             </div>
                         </div>
 
@@ -247,6 +262,7 @@ include INCLUDES_PATH . '/header.php';
                                    class="form-control" 
                                    id="account_name" 
                                    name="account_name" 
+                                   value="<?= e($oldAccountName) ?>"
                                    placeholder="Will be fetched automatically, or type manually" 
                                    required>
                             <div id="account-name-alert" style="display:none;" class="mt-2"></div>
@@ -259,6 +275,7 @@ include INCLUDES_PATH . '/header.php';
                                    class="form-control" 
                                    id="remark" 
                                    name="remark" 
+                                   value="<?= e($oldRemark) ?>"
                                    placeholder="e.g. Payment for services / Rent">
                         </div>
 
@@ -429,15 +446,22 @@ $(document).ready(function() {
                         showAccountAlert('success', 'Account verified: ' + res.account_name);
                     } else {
                         $('#account_name').val('');
-                        showAccountAlert('error', (res.message || 'Could not verify account name.') + ' — You can type the account name manually.');
+                        var msg = res.message || 'Could not verify account name.';
+                        if (!msg.toLowerCase().includes('manually')) {
+                            msg += ' — You can type the account name manually.';
+                        }
+                        showAccountAlert('error', msg);
                     }
                 },
                 error: function(xhr) {
                     $('#account_name').val('');
                     var err = (xhr.responseJSON && xhr.responseJSON.message)
                         ? xhr.responseJSON.message
-                        : 'Could not reach the account verification service.';
-                    showAccountAlert('error', err + ' — You can type the account name manually.');
+                        : 'Account name verification is temporarily unavailable.';
+                    if (!err.toLowerCase().includes('manually')) {
+                        err += ' — You can type the account name manually.';
+                    }
+                    showAccountAlert('error', err);
                 },
                 complete: function() {
                     $('#account_name').prop('disabled', false).focus();
@@ -457,8 +481,14 @@ $(document).ready(function() {
         }
     });
 
-    // ── Form submit validation ────────────────────────────────────────────────
+    // ── Form submit validation & double-click protection ──────────────────────
+    var isSubmitting = false;
     $('#withdrawForm').on('submit', function(e) {
+        if (isSubmitting) {
+            e.preventDefault();
+            return false;
+        }
+
         if (!$('#selected_bank_name').val()) {
             e.preventDefault();
             Swal.fire({
@@ -469,6 +499,7 @@ $(document).ready(function() {
             return false;
         }
 
+        isSubmitting = true;
         var $submitBtn = $('#btnSubmitWithdrawal');
         $submitBtn.prop('disabled', true).addClass('disabled opacity-50')
             .html('<i class="fas fa-spinner fa-spin me-2"></i> Processing Withdrawal...');
@@ -533,7 +564,7 @@ $(document).ready(function() {
                     <button type="button" class="btn btn-outline-secondary w-50 py-2 rounded-12 fw-bold" data-bs-dismiss="modal">
                         Make Another
                     </button>
-                    <a href="<?= APP_URL ?>/wallet" class="btn btn-danger w-50 py-2 rounded-12 fw-bold bg-site-color border-0">
+                    <a href="<?= APP_URL ?>/transactions" class="btn btn-danger w-50 py-2 rounded-12 fw-bold bg-site-color border-0">
                         View History
                     </a>
                 </div>

@@ -9,18 +9,25 @@ requireAdmin();
 $adminPageTitle = 'System Logs Viewer';
 
 $logDir = BASE_PATH . '/logs';
-$logFiles = glob("$logDir/*.log");
+$rootLogs = glob("$logDir/*.log") ?: [];
+$subLogs  = glob("$logDir/*/*.log") ?: [];
+$logFiles = array_merge($rootLogs, $subLogs);
 
 $selectedFile = get('file') ?: '';
 $logContent = '';
 
-if ($selectedFile && in_array($logDir . '/' . $selectedFile, $logFiles)) {
-    $filePath = $logDir . '/' . $selectedFile;
-    if (file_exists($filePath)) {
-        // Read last 200 lines
-        $lines = file($filePath);
-        $lastLines = array_slice($lines, -200);
-        $logContent = implode('', $lastLines);
+if ($selectedFile) {
+    foreach ($logFiles as $lf) {
+        $relName = str_replace(BASE_PATH . '/logs/', '', str_replace('\\', '/', $lf));
+        if ($selectedFile === $relName || $selectedFile === basename($lf)) {
+            if (file_exists($lf)) {
+                $lines = file($lf);
+                $lastLines = array_slice($lines, -300);
+                $logContent = implode('', $lastLines);
+                $selectedFile = $relName;
+                break;
+            }
+        }
     }
 }
 
@@ -51,10 +58,10 @@ include ADMIN_PATH . '/includes/header.php';
                                 <p class="text-muted small">No log files found in directory.</p>
                             <?php else: ?>
                                 <?php foreach ($logFiles as $lf): ?>
-                                    <?php $base = basename($lf); ?>
-                                    <a href="<?= APP_URL ?>/admin/system-logs?file=<?= e($base) ?>" 
-                                       class="list-group-item list-group-item-action border-0 py-2 rounded-6 mb-1 small d-flex align-items-center justify-content-between <?= $selectedFile === $base ? 'active bg-primary bg-opacity-10 text-primary fw-bold' : '' ?>">
-                                        <span><i class="fas fa-file-text me-2"></i><?= e($base) ?></span>
+                                    <?php $rel = str_replace(BASE_PATH . '/logs/', '', str_replace('\\', '/', $lf)); ?>
+                                    <a href="<?= APP_URL ?>/admin/system-logs?file=<?= e($rel) ?>" 
+                                       class="list-group-item list-group-item-action border-0 py-2 rounded-6 mb-1 small d-flex align-items-center justify-content-between <?= ($selectedFile === $rel || $selectedFile === basename($lf)) ? 'active bg-primary bg-opacity-10 text-primary fw-bold' : '' ?>">
+                                        <span><i class="fas fa-file-text me-2"></i><?= e($rel) ?></span>
                                         <span class="text-muted fs-8"><?= formatBytes(filesize($lf)) ?></span>
                                     </a>
                                 <?php endforeach; ?>

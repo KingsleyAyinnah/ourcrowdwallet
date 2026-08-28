@@ -166,6 +166,30 @@ function getIntendedUrl(string $default = ''): string
     return $url;
 }
 
+/**
+ * Store old form input in session for retry preservation
+ */
+function setOldInputs(array $data): void
+{
+    $_SESSION['_old_inputs'] = $data;
+}
+
+/**
+ * Get flash old form input
+ */
+function getOldInput(string $key, string $default = ''): string
+{
+    return (string)($_SESSION['_old_inputs'][$key] ?? $default);
+}
+
+/**
+ * Clear flash old inputs
+ */
+function clearOldInputs(): void
+{
+    unset($_SESSION['_old_inputs']);
+}
+
 // Initialize session at load time
 sessionStart();
 sendSecurityHeaders();

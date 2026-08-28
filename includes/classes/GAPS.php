@@ -40,19 +40,27 @@ class GAPS
 
     public static function getChannel(): string
     {
-        return (string) setting('gaps_channel', defined('GAPS_CHANNEL') ? GAPS_CHANNEL : 'GSTP');
+        $channel = trim((string) setting('gaps_channel', ''));
+        if ($channel !== '') {
+            return $channel;
+        }
+        return defined('GAPS_CHANNEL') ? GAPS_CHANNEL : 'GSTP';
     }
 
     public static function resolveBaseUrl(): string
     {
+        $env = strtolower((string) setting('gaps_env', defined('GAPS_ENV') ? GAPS_ENV : 'sandbox'));
         $baseUrl = trim((string) setting('gaps_base_url', ''));
-        if ($baseUrl !== '') {
-            return $baseUrl;
+
+        if ($env === 'live') {
+            if (!empty($baseUrl) && !str_contains($baseUrl, 'gtweb6')) {
+                return $baseUrl;
+            }
+            return defined('GAPS_BASE_URL_LIVE') ? GAPS_BASE_URL_LIVE : 'https://gtweb.gtbank.com/GSTPS/GAPS_FileUploader/FileUploader.asmx';
         }
 
-        $env = strtolower((string) setting('gaps_env', defined('GAPS_ENV') ? GAPS_ENV : 'sandbox'));
-        if ($env === 'live' && defined('GAPS_BASE_URL_LIVE')) {
-            return GAPS_BASE_URL_LIVE;
+        if (!empty($baseUrl) && str_contains($baseUrl, 'gtweb6')) {
+            return $baseUrl;
         }
 
         return defined('GAPS_BASE_URL_SANDBOX') ? GAPS_BASE_URL_SANDBOX : 'https://gtweb6.gtbank.com/GSTPS/GAPS_FileUploader/FileUploader.asmx';
@@ -71,16 +79,21 @@ class GAPS
         }
 
         if (str_contains($raw, '-----BEGIN')) {
-            return $raw;
+            return str_replace(["\r\n", "\r"], "\n", $raw);
         }
 
-        $decoded = base64_decode($raw, true);
+        $decoded = @base64_decode($raw, true);
         if ($decoded !== false && str_contains($decoded, '-----BEGIN')) {
-            return trim($decoded);
+            return trim(str_replace(["\r\n", "\r"], "\n", $decoded));
         }
 
-        $body = preg_replace('/\s+/', '', $raw);
-        return sprintf("-----BEGIN PUBLIC KEY-----\n%s-----END PUBLIC KEY-----\n", chunk_split($body, 64, "\n"));
+        // Clean out any quotes, backslashes, or non-base64 characters
+        $body = preg_replace('/[^A-Za-z0-9\+\/\=]/', '', $raw);
+        if (empty($body)) {
+            return '';
+        }
+
+        return "-----BEGIN PUBLIC KEY-----\n" . chunk_split($body, 64, "\n") . "-----END PUBLIC KEY-----\n";
     }
 
     /**
@@ -93,10 +106,19 @@ class GAPS
             $raw = defined('GAPS_PUBLIC_KEY') ? GAPS_PUBLIC_KEY : '';
         }
 
+        $raw = html_entity_decode((string)$raw, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $pem = self::normalizePem($raw);
         $key = openssl_pkey_get_public($pem);
 
         if ($key === false) {
+            // Automatic Fallback: If DB setting key is invalid, try default system key
+            if (defined('GAPS_PUBLIC_KEY') && !empty(GAPS_PUBLIC_KEY)) {
+                $pemFallback = self::normalizePem(GAPS_PUBLIC_KEY);
+                $keyFallback = openssl_pkey_get_public($pemFallback);
+                if ($keyFallback !== false) {
+                    return $keyFallback;
+                }
+            }
             throw new \RuntimeException('GAPS: Failed to load GTBank RSA Public Key: ' . openssl_error_string());
         }
 
@@ -228,69 +250,81 @@ class GAPS
         string $bankCode,
         float  $amount,
         string $reference,
-        string $narration = ''
+        string $narration = '',
+        string $bankName = ''
     ): array {
         if ($amount <= 0) {
             return self::errorResponse('Withdrawal amount must be greater than zero.', 'INVALID_AMOUNT');
         }
 
-        $encUser   = self::encryptField(self::getUsername());
-        $encPass   = self::encryptField(self::getPassword());
-        $encAccess = self::encryptField(self::getAccessCode());
-        $channel   = self::getChannel();
-        $sourceAcc = self::getAccountNumber();
-        $narration = $narration ?: 'Withdrawal via ' . APP_NAME;
+        $encUser        = self::encryptField(self::getUsername());
+        $encPass        = self::encryptField(self::getPassword());
+        $encAccess      = self::encryptField(self::getAccessCode());
+        $encAmount      = self::encryptField(number_format($amount, 2, '.', ''));
+        $encVendorAcct  = self::encryptField($accountNumber);
+        $encCustomerAcct= self::encryptField(self::getAccountNumber());
+        $channel        = self::getChannel();
+        $narration      = $narration ?: 'Withdrawal via ' . APP_NAME;
+        $paymentDate    = date('Y-m-d');
+        $cbnBankCode = (!empty($bankCode) && is_numeric($bankCode)) ? $bankCode : getBankCodeByName($bankName);
+        if (empty($cbnBankCode)) {
+            $cbnBankCode = getBankCodeByName($bankName);
+        }
+        if (empty($cbnBankCode)) {
+            $cbnBankCode = '058';
+        }
 
-        $innerXml = "
-        <SingleTransferRequest>
-            <username>{$encUser}</username>
-            <password>{$encPass}</password>
-            <accesscode>{$encAccess}</accesscode>
-            <channel>{$channel}</channel>
-            <transdetails>
-                <transaction>
-                    <amount>{$amount}</amount>
-                    <sourceaccount>{$sourceAcc}</sourceaccount>
-                    <destinationaccount>{$accountNumber}</destinationaccount>
-                    <destinationbankcode>{$bankCode}</destinationbankcode>
-                    <destinationaccountname>" . htmlspecialchars($accountName, ENT_XML1) . "</destinationaccountname>
-                    <reference>{$reference}</reference>
-                    <narration>" . htmlspecialchars($narration, ENT_XML1) . "</narration>
-                </transaction>
-            </transdetails>
-        </SingleTransferRequest>";
+        $cleanVendorName = preg_replace('/[^A-Za-z0-9 ]/', '', strtoupper(trim($accountName)));
+        if (empty($cleanVendorName)) {
+            $cleanVendorName = 'BENEFICIARY';
+        }
+
+        $transDetailsInner = "<transaction>" .
+            "<amount>{$encAmount}</amount>" .
+            "<paymentdate>{$paymentDate}</paymentdate>" .
+            "<reference>" . htmlspecialchars($reference, ENT_XML1) . "</reference>" .
+            "<remarks>" . htmlspecialchars($narration, ENT_XML1) . "</remarks>" .
+            "<vendorcode>12345</vendorcode>" .
+            "<vendorname>" . htmlspecialchars($cleanVendorName, ENT_XML1) . "</vendorname>" .
+            "<vendoracctnumber>{$encVendorAcct}</vendoracctnumber>" .
+            "<vendorbankcode>{$cbnBankCode}</vendorbankcode>" .
+            "<customeracctnumber>{$encCustomerAcct}</customeracctnumber>" .
+            "</transaction>";
+
+        $cdataInner = "<SingleTransfers><transdetails>" . htmlspecialchars($transDetailsInner, ENT_XML1) . "</transdetails></SingleTransfers>";
 
         $xmlPayload = "
-  <xmlRequest>" . htmlspecialchars($innerXml, ENT_XML1) . "</xmlRequest>
-  <username>{$encUser}</username>
-  <accesscode>{$encAccess}</accesscode>
-  <password>{$encPass}</password>
-  <channel>{$channel}</channel>";
+<xmlRequest><![CDATA[{$cdataInner}]]></xmlRequest>
+<username>{$encUser}</username>
+<accesscode>{$encAccess}</accesscode>
+<password>{$encPass}</password>
+<channel>{$channel}</channel>";
 
-        $response = self::sendXmlRequest($xmlPayload, 'SingleTransfers_Enc');
+        $response = self::sendXmlRequest($xmlPayload, 'SingleTransfers_Enc', 60, 1);
 
         if ($response['success']) {
             $parsed = self::parseResponseXml($response['raw']);
-            $code   = (string)($parsed['responsecode'] ?? $parsed['status'] ?? '00');
-            $msg    = (string)($parsed['responsemessage'] ?? $parsed['message'] ?? 'Transfer Processed Successfully');
+            $code   = (string)($parsed['responsecode'] ?? $parsed['rescode'] ?? $parsed['code'] ?? $parsed['status'] ?? '');
+            $msg    = (string)($parsed['responsemessage'] ?? $parsed['message'] ?? 'Transfer Processed');
             
-            $success = in_array($code, ['00', '0', '000', 'SUCCESS', 'PROCESSED'], true);
+            $success = in_array($code, ['00', '0', '000', '1000', 'SUCCESS', 'PROCESSED'], true);
+
             $response['success'] = $success;
             $response['message'] = $msg;
             $response['code']    = $code;
             $response['data']    = $parsed;
-        } elseif (strtolower((string)setting('gaps_env', 'sandbox')) === 'sandbox') {
-            $response['success'] = true;
-            $response['message'] = 'GAPS Sandbox Mode: Transfer Processed Successfully (Simulated)';
-            $response['code']    = '00';
-            $response['data']    = ['status' => 'SUCCESS', 'responsecode' => '00'];
+        } else {
+            writeLog(LOG_CHAN_WALLET, 'error', 'GAPS SingleTransfers_Enc HTTP/SOAP request failed', [
+                'reference' => $reference,
+                'error'     => $response['message'] ?? 'Unknown transfer error',
+            ]);
         }
 
         return $response;
     }
 
     /**
-     * Requery status of a GAPS transaction by reference.
+     * Requery status of a GAPS transaction by reference using TransactionRequery_Enc.
      */
     public static function requeryTransaction(string $reference): array
     {
@@ -299,27 +333,47 @@ class GAPS
         $encAccess = self::encryptField(self::getAccessCode());
         $channel   = self::getChannel();
 
-        $innerXml = "
-        <TransactionRequeryRequest>
-            <username>{$encUser}</username>
-            <password>{$encPass}</password>
-            <accesscode>{$encAccess}</accesscode>
-            <channel>{$channel}</channel>
-            <transref>{$reference}</transref>
-        </TransactionRequeryRequest>";
+        $innerXml = "<TransactionRequeryRequest><TransRef>" . htmlspecialchars($reference, ENT_XML1) . "</TransRef></TransactionRequeryRequest>";
 
         $xmlPayload = "
-  <xmlstring>" . htmlspecialchars($innerXml, ENT_XML1) . "</xmlstring>
-  <customerid>{$encAccess}</customerid>
-  <username>{$encUser}</username>
-  <password>{$encPass}</password>
-  <channel>{$channel}</channel>";
+<xmlstring>" . htmlspecialchars($innerXml, ENT_XML1) . "</xmlstring>
+<customerid>{$encAccess}</customerid>
+<username>{$encUser}</username>
+<password>{$encPass}</password>
+<channel>{$channel}</channel>";
+
+        writeLog(LOG_CHAN_WALLET, 'info', 'Sending GAPS TransactionRequery_Enc request', [
+            'reference' => $reference,
+            'endpoint'  => self::resolveBaseUrl(),
+        ]);
 
         $response = self::sendXmlRequest($xmlPayload, 'TransactionRequery_Enc');
 
         if ($response['success']) {
             $parsed = self::parseResponseXml($response['raw']);
-            $response['data'] = $parsed;
+            $code   = (string)($parsed['code'] ?? $parsed['rescode'] ?? $parsed['responsecode'] ?? $parsed['status'] ?? '');
+            $msg    = (string)($parsed['message'] ?? $parsed['responsemessage'] ?? 'Transaction Requery Processed');
+
+            writeLog(LOG_CHAN_WALLET, 'info', 'GAPS TransactionRequery_Enc response received', [
+                'reference' => $reference,
+                'code'      => $code,
+                'message'   => $msg,
+                'parsed'    => $parsed,
+                'raw'       => $response['raw'],
+            ]);
+
+            // Success codes: 1000 (Success), 1007 (Duplicate Reference - already processed), 00, 0, SUCCESS
+            $success = in_array($code, ['1000', '1007', '00', '0', '000', 'SUCCESS', 'PROCESSED'], true);
+
+            $response['success'] = $success;
+            $response['message'] = $msg;
+            $response['code']    = $code;
+            $response['data']    = $parsed;
+        } else {
+            writeLog(LOG_CHAN_WALLET, 'error', 'GAPS TransactionRequery_Enc HTTP/SOAP request failed', [
+                'reference' => $reference,
+                'error'     => $response['message'] ?? 'Unknown requery error',
+            ]);
         }
 
         return $response;
@@ -424,6 +478,12 @@ class GAPS
             $msg = trim((string)($parsed['message'] ?? $parsed['description'] ?? 'Account validation failed'));
             $msg = ltrim($msg, ' :'); // Strip leading spaces/colons
 
+            if ($code === '1008' || stripos($msg, 'System error') !== false) {
+                $userMsg = 'Automated name lookup is temporarily unavailable. Please type the account name manually.';
+            } else {
+                $userMsg = $msg . ($code ? ' (Code ' . $code . ')' : '');
+            }
+
             writeLog(LOG_CHAN_GAPS, 'error', 'GAPS account resolve returned non-success response.', [
                 'bank_name' => $bankName,
                 'account_number' => $accountNumber,
@@ -435,7 +495,7 @@ class GAPS
 
             return [
                 'success' => false,
-                'message' => $msg . ' (Code ' . $code . ')'
+                'message' => $userMsg
             ];
         } catch (\Throwable $e) {
             writeLog(LOG_CHAN_GAPS, 'error', 'Failed to parse GAPS account resolve response.', [
@@ -457,7 +517,7 @@ class GAPS
     /**
      * Send XML POST request to GTBank GAPS WebService endpoint.
      */
-    private static function sendXmlRequest(string $xmlPayload, string $actionName): array
+    private static function sendXmlRequest(string $xmlPayload, string $actionName, int $timeout = GAPS_TIMEOUT, int $maxRetries = GAPS_MAX_RETRIES): array
     {
         $endpoint = self::resolveBaseUrl();
         $attempt  = 0;
@@ -487,7 +547,9 @@ class GAPS
             $postData = $xmlPayload;
         }
 
-        while ($attempt < GAPS_MAX_RETRIES) {
+        $cookieFile = sys_get_temp_dir() . '/gaps_cookie_' . md5(self::getUsername()) . '.txt';
+
+        while ($attempt < $maxRetries) {
             $attempt++;
 
             try {
@@ -497,11 +559,14 @@ class GAPS
                     CURLOPT_POST           => true,
                     CURLOPT_POSTFIELDS     => $postData,
                     CURLOPT_RETURNTRANSFER => true,
-                    CURLOPT_TIMEOUT        => GAPS_TIMEOUT,
-                    CURLOPT_CONNECTTIMEOUT => 10,
+                    CURLOPT_TIMEOUT        => $timeout,
+                    CURLOPT_CONNECTTIMEOUT => 15,
                     CURLOPT_HTTPHEADER     => $headers,
                     CURLOPT_SSL_VERIFYPEER => false,
                     CURLOPT_SSL_VERIFYHOST => 0,
+                    CURLOPT_COOKIEJAR      => $cookieFile,
+                    CURLOPT_COOKIEFILE     => $cookieFile,
+                    CURLOPT_USERAGENT      => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
                 ]);
 
                 $rawResponse = curl_exec($ch);
@@ -556,23 +621,40 @@ class GAPS
             return $transactions;
         }
 
-        // Decode HTML entities if response was wrapped inside a SOAP envelope or CDATA block
-        $decoded = html_entity_decode($rawXml, ENT_QUOTES | ENT_XML1, 'UTF-8');
+        // Iteratively decode HTML entities if double-encoded
+        $decoded = $rawXml;
+        $maxDecode = 3;
+        while ($maxDecode-- > 0 && (str_contains($decoded, '&lt;') || str_contains($decoded, '&amp;'))) {
+            $decoded = html_entity_decode($decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        }
 
-        // Extract <Transaction> blocks via regex or SimpleXML
-        preg_match_all('/<Transaction>(.*?)<\/Transaction>/s', $decoded, $matches);
+        // Extract <Transaction> blocks case-insensitively
+        preg_match_all('/<Transaction>(.*?)<\/Transaction>/is', $decoded, $matches);
 
         if (!empty($matches[1])) {
             foreach ($matches[1] as $block) {
-                preg_match('/<val_date>(.*?)<\/val_date>/i', $block, $mDate);
-                preg_match('/<debit>(.*?)<\/debit>/i', $block, $mDebit);
-                preg_match('/<credit>(.*?)<\/credit>/i', $block, $mCredit);
-                preg_match('/<balance>(.*?)<\/balance>/i', $block, $mBalance);
-                preg_match('/<remarks>(.*?)<\/remarks>/i', $block, $mRemarks);
-                preg_match('/<reference>(.*?)<\/reference>/i', $block, $mRef);
+                $mDate = [];
+                $mDebit = [];
+                $mCredit = [];
+                $mBalance = [];
+                $mRemarks = [];
+                $mRef = [];
 
-                $creditVal = (float)str_replace(',', '', trim($mCredit[1] ?? '0'));
-                $debitVal  = (float)str_replace(',', '', trim($mDebit[1] ?? '0'));
+                if (!preg_match('/<tra_date>(.*?)<\/tra_date>/is', $block, $mDate)) {
+                    preg_match('/<val_date>(.*?)<\/val_date>/is', $block, $mDate);
+                }
+                preg_match('/<debit>(.*?)<\/debit>/is', $block, $mDebit);
+                preg_match('/<credit>(.*?)<\/credit>/is', $block, $mCredit);
+                preg_match('/<balance>(.*?)<\/balance>/is', $block, $mBalance);
+                preg_match('/<remarks>(.*?)<\/remarks>/is', $block, $mRemarks);
+                preg_match('/<reference>(.*?)<\/reference>/is', $block, $mRef);
+
+                $creditStr = trim($mCredit[1] ?? '0');
+                $debitStr  = trim($mDebit[1] ?? '0');
+
+                $creditVal = (float)str_replace(',', '', $creditStr);
+                $debitVal  = (float)str_replace(',', '', $debitStr);
+
                 $amount    = $creditVal > 0 ? $creditVal : $debitVal;
                 $type      = $creditVal > 0 ? TXN_CREDIT : TXN_DEBIT;
                 $ref       = trim($mRef[1] ?? '');
@@ -591,7 +673,7 @@ class GAPS
                         'transaction_date' => $date,
                         'balance_after'    => $balance,
                         'raw'              => [
-                            'val_date' => $rawDate,
+                            'tra_date' => $rawDate,
                             'debit'    => $debitVal,
                             'credit'   => $creditVal,
                             'balance'  => $balance,
@@ -648,6 +730,22 @@ class GAPS
             'code'    => $response['code'] ?? null,
             'http'    => $response['http'] ?? null,
         ]);
+    }
+
+    /**
+     * Get CBN bank code by name
+     */
+    public static function getBankCodeByName(string $bankName): string
+    {
+        return getBankCodeByName($bankName);
+    }
+
+    /**
+     * Get 9-digit GAPS Sort Code by name
+     */
+    public static function getBankSortCodeByName(string $bankName): string
+    {
+        return getBankSortCodeByName($bankName);
     }
 
     private static function errorResponse(string $message, string $code = 'ERROR'): array

@@ -163,7 +163,9 @@ class Database
      */
     public static function commit(): void
     {
-        self::getInstance()->commit();
+        if (self::getInstance()->inTransaction()) {
+            self::getInstance()->commit();
+        }
     }
 
     /**

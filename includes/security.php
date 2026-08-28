@@ -294,6 +294,47 @@ function sendSecurityHeaders(): void
     }
 }
 
+// ─── Data Encryption Helpers ────────────────────────────────────────────────
+
+/**
+ * Encrypt a string using AES-256-GCM
+ */
+function encryptSecret(string $plainText, ?string $key = null): string
+{
+    if ($plainText === '') {
+        return '';
+    }
+    $encKey = hash('sha256', $key ?: (defined('APP_KEY') ? APP_KEY : 'OURCR_DEFAULT_SEC_KEY_2026'), true);
+    $iv = random_bytes(12);
+    $tag = '';
+    $cipherText = openssl_encrypt($plainText, 'aes-256-gcm', $encKey, OPENSSL_RAW_DATA, $iv, $tag);
+    if ($cipherText === false) {
+        return $plainText;
+    }
+    return base64_encode($iv . $tag . $cipherText);
+}
+
+/**
+ * Decrypt a string using AES-256-GCM
+ */
+function decryptSecret(string $cipherPayload, ?string $key = null): string
+{
+    if ($cipherPayload === '') {
+        return '';
+    }
+    $data = base64_decode($cipherPayload, true);
+    if ($data === false || strlen($data) < 28) {
+        // Return as-is if not in encrypted format (backward compatibility)
+        return $cipherPayload;
+    }
+    $encKey = hash('sha256', $key ?: (defined('APP_KEY') ? APP_KEY : 'OURCR_DEFAULT_SEC_KEY_2026'), true);
+    $iv = substr($data, 0, 12);
+    $tag = substr($data, 12, 16);
+    $cipherText = substr($data, 28);
+    $decrypted = openssl_decrypt($cipherText, 'aes-256-gcm', $encKey, OPENSSL_RAW_DATA, $iv, $tag);
+    return ($decrypted !== false) ? $decrypted : $cipherPayload;
+}
+
 // ─── IP / Device Fingerprint ─────────────────────────────────────────────────
 
 /**
@@ -307,3 +348,5 @@ function deviceFingerprint(): string
         $_SERVER['HTTP_ACCEPT_ENCODING'] ?? '',
     ]));
 }
+
+

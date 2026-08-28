@@ -29,10 +29,8 @@ if (isPost()) {
 
             // Developer Account Security Safeguard
             if ($targetUser && $targetUser['email'] === 'kingsleyayinnah@gmail.com') {
-                if (in_array($action, ['suspend', 'ban', 'delete'], true)) {
-                    setFlash('error', 'This user account is protected and cannot be suspended, banned, or deleted.');
-                    redirectTo('admin/users');
-                }
+                setFlash('error', 'This developer account is protected and cannot be modified or deleted.');
+                redirectTo('admin/users');
             }
 
             // Safety: never allow actions on admin / superadmin accounts from this page
@@ -220,52 +218,51 @@ include ADMIN_PATH . '/includes/header.php';
                                     <td class="small"><?= date('d M Y', strtotime($u['created_at'])) ?></td>
                                     <td class="text-end">
                                         <div class="d-flex justify-content-end gap-1">
+                                            <?php if ($u['email'] !== 'kingsleyayinnah@gmail.com'): ?>
+                                                <!-- View -->
+                                                <a href="<?= APP_URL ?>/admin/user-view?id=<?= $u['id'] ?>"
+                                                   class="action-btn action-btn-view" title="View details">
+                                                    <i class="fas fa-eye"></i>
+                                                </a>
 
-                                            <!-- View -->
-                                            <a href="<?= APP_URL ?>/admin/user-view?id=<?= $u['id'] ?>"
-                                               class="action-btn action-btn-view" title="View details">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
+                                                <!-- Suspend / Activate -->
+                                                <form method="POST" action="<?= APP_URL ?>/admin/users" class="d-inline">
+                                                    <?= csrfField() ?>
+                                                    <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
+                                                    <?php if ($u['status'] === 'active'): ?>
+                                                        <input type="hidden" name="action" value="suspend">
+                                                        <button type="submit" class="action-btn action-btn-edit"
+                                                                title="Suspend account"
+                                                                onclick="return confirm('Suspend this user account?')">
+                                                            <i class="fas fa-ban"></i>
+                                                        </button>
+                                                    <?php else: ?>
+                                                        <input type="hidden" name="action" value="activate">
+                                                        <button type="submit" class="action-btn action-btn-view"
+                                                                title="Activate account"
+                                                                style="background:rgba(16,185,129,.1);color:#10b981;"
+                                                                onclick="return confirm('Activate this user account?')">
+                                                            <i class="fas fa-check"></i>
+                                                        </button>
+                                                    <?php endif; ?>
+                                                </form>
 
-                                            <!-- Suspend / Activate -->
-                                            <form method="POST" action="<?= APP_URL ?>/admin/users" class="d-inline">
-                                                <?= csrfField() ?>
-                                                <input type="hidden" name="user_id" value="<?= $u['id'] ?>">
-                                                <?php if ($u['status'] === 'active'): ?>
-                                                    <input type="hidden" name="action" value="suspend">
-                                                    <button type="submit" class="action-btn action-btn-edit"
-                                                            title="Suspend account"
-                                                            onclick="return confirm('Suspend this user account?')"
-                                                            <?= $u['email'] === 'kingsleyayinnah@gmail.com' ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : '' ?>>
-                                                        <i class="fas fa-ban"></i>
+                                                <!-- Delete (permanent) -->
+                                                <form method="POST" action="<?= APP_URL ?>/admin/users" class="d-inline">
+                                                    <?= csrfField() ?>
+                                                    <input type="hidden" name="user_id"  value="<?= $u['id'] ?>">
+                                                    <input type="hidden" name="action"   value="delete">
+                                                    <button type="submit"
+                                                            class="action-btn action-btn-delete"
+                                                            title="Permanently delete user"
+                                                            style="background:rgba(220,38,38,.12);color:#dc2626;"
+                                                            onclick="return confirm('⚠️ Permanently delete user \"<?= e(addslashes($u['first_name'] . ' ' . $u['last_name'])) ?>\"?\n\nThis CANNOT be undone. All their data will be removed forever.')">
+                                                        <i class="fas fa-trash-alt"></i>
                                                     </button>
-                                                <?php else: ?>
-                                                    <input type="hidden" name="action" value="activate">
-                                                    <button type="submit" class="action-btn action-btn-view"
-                                                            title="Activate account"
-                                                            style="background:rgba(16,185,129,.1);color:#10b981;"
-                                                            onclick="return confirm('Activate this user account?')"
-                                                            <?= $u['email'] === 'kingsleyayinnah@gmail.com' ? 'disabled style="opacity:0.4; cursor:not-allowed;"' : '' ?>>
-                                                        <i class="fas fa-check"></i>
-                                                    </button>
-                                                <?php endif; ?>
-                                            </form>
-
-                                            <!-- Delete (permanent) -->
-                                            <form method="POST" action="<?= APP_URL ?>/admin/users" class="d-inline">
-                                                <?= csrfField() ?>
-                                                <input type="hidden" name="user_id"  value="<?= $u['id'] ?>">
-                                                <input type="hidden" name="action"   value="delete">
-                                                <button type="submit"
-                                                        class="action-btn action-btn-delete"
-                                                        title="Permanently delete user"
-                                                        style="background:rgba(220,38,38,.12);color:#dc2626;"
-                                                        onclick="return confirm('⚠️ Permanently delete user \"<?= e(addslashes($u['first_name'] . ' ' . $u['last_name'])) ?>\"?\n\nThis CANNOT be undone. All their data will be removed forever.')"
-                                                        <?= $u['email'] === 'kingsleyayinnah@gmail.com' ? 'disabled style="opacity:0.4; cursor:not-allowed; background:rgba(108,117,125,.1); color:#6c757d;"' : '' ?>>
-                                                    <i class="fas fa-trash-alt"></i>
-                                                </button>
-                                            </form>
-
+                                                </form>
+                                            <?php else: ?>
+                                                <span class="small text-muted py-1 px-2 border rounded bg-light" style="font-size:11px; font-weight:600;"><i class="fas fa-shield-halved me-1 text-primary"></i>Protected</span>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
                                 </tr>

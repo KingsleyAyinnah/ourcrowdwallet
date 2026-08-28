@@ -154,15 +154,15 @@ include INCLUDES_PATH . '/header.php';
                         </div>
 
                         <div class="mb-4">
-                            <label for="sender_name" class="form-label fw-bold small">Sender Account Name</label>
+                            <label for="sender_name" class="form-label fw-bold small">Sender Full Account Name</label>
                             <input type="text" 
                                    class="form-control" 
                                    id="sender_name" 
                                    name="sender_name" 
                                    value="<?= e($user['first_name'] . ' ' . $user['last_name']) ?>" 
-                                   placeholder="Enter the sender's bank account name exactly" 
+                                   placeholder="Enter the sender's full bank account name" 
                                    required>
-                            <div class="form-text small">Must match your bank account name for fast automated verification.</div>
+                            <div class="form-text small">Must match your full bank account name for fast automated verification.</div>
                         </div>
 
                         <button type="submit" class="btn btn-danger w-100 py-3 rounded-12 fw-bold bg-site-color border-0" id="btnSubmitIntent">
@@ -306,7 +306,7 @@ $(function(){
             $('#paymentSentFeedback').html(
                 '<div class="alert alert-success rounded-12 border-0 small">' +
                 '<i class="fas fa-check-circle me-2"></i><strong>Thank you!</strong> Our automated system is verifying bank records. Your wallet will be credited automatically once confirmed.' +
-                '<div class="mt-2"><a href="<?= APP_URL ?>/wallet" class="btn btn-sm btn-success rounded-pill">View Wallet History</a></div>' +
+                '<div class="mt-2"><a href="<?= APP_URL ?>/transactions" class="btn btn-sm btn-success rounded-pill">View Wallet History</a></div>' +
                 '</div>'
             );
         }, 800);

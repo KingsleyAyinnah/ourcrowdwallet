@@ -17,6 +17,7 @@ $adminRoutes = [
     ''              => 'dashboard',
     'dashboard'     => 'dashboard',
     'income-wallet' => 'income_wallet',
+    'admin-payouts' => 'admin_payouts',
     'users'         => 'users',
     'admins'        => 'admins',
     'user-view'     => 'user_view',
@@ -25,6 +26,7 @@ $adminRoutes = [
     'withdrawals'   => 'withdrawals',
     'transactions'  => 'transactions',
     'vtpass-logs'   => 'vtpass_logs',
+    'vtpass-balance'=> 'vtpass_balance',
     'gaps-logs'     => 'gaps_logs',
     'revenue'       => 'revenue',
     'reports'       => 'reports',
@@ -53,11 +55,21 @@ $publicAdminPages = ['login'];
 
 if (!in_array($slug, $publicAdminPages, true)) {
     requireAdmin();
+
+    // Support role routing restrictions
+    if (hasRole('support') && !in_array($slug, ['support', 'logout'], true)) {
+        setFlash('error', 'Access Restricted: Support role can only access the Support portal.');
+        redirectTo('admin/support');
+    }
 }
 
-// Redirect logged-in admins away from admin login
-if ($slug === 'login' && isLoggedIn() && hasRole('admin', 'superadmin')) {
-    redirectTo('admin/dashboard');
+// Redirect logged-in admins away from admin login page
+if ($slug === 'login' && isLoggedIn()) {
+    if (hasRole('support')) {
+        redirectTo('admin/support');
+    } elseif (hasRole('admin', 'superadmin')) {
+        redirectTo('admin/dashboard');
+    }
 }
 
 if (!file_exists($pageFile)) {

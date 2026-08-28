@@ -17,6 +17,11 @@ if (!$user) {
     redirectTo('admin/users');
 }
 
+if ($user['email'] === 'kingsleyayinnah@gmail.com') {
+    setFlash('error', 'Access Restricted: This developer account is protected and cannot be viewed.');
+    redirectTo('admin/users');
+}
+
 $adminPageTitle = 'User Details — ' . $user['username'];
 $error = '';
 $success = '';

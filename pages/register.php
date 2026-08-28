@@ -53,6 +53,43 @@ $referralCode = sanitize(get('ref', ''));
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="index, follow">
+
+    <!-- Social Open Graph / WhatsApp / Facebook / Telegram Link Preview -->
+    <?php
+    $host = $_SERVER['HTTP_HOST'] ?? '';
+    $isLocal = empty($host) || str_contains($host, 'localhost') || str_contains($host, '127.0.0.1');
+    $publicDomain = $isLocal ? 'https://ourcrowdwallet.com' : (isHttps() ? 'https://' : 'http://') . $host;
+    $subDir = (defined('APP_URL') && str_contains(APP_URL, '/ourcr')) ? '/ourcr' : '';
+
+    $ogUrl         = $publicDomain . ($subDir ? $subDir : '') . ($_SERVER['REQUEST_URI'] ?? '');
+    $ogTagline     = setting('site_tagline', 'Instant Data, Airtime & Utility Bills Payment Platform');
+    $ogTitle       = (!empty($pageTitle) && $pageTitle !== $siteName) ? ($pageTitle . ' — ' . $siteName) : ($siteName . ' — ' . $ogTagline);
+    $ogDescription = 'Join ' . $siteName . ' today! Buy cheap data, airtime, pay utility bills instantly and earn referral bonuses on every transaction.';
+    $ogImage       = $publicDomain . ($subDir ? $subDir : '') . '/assets/images/digital-flyer.jpeg';
+    ?>
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="<?= e($ogUrl) ?>">
+    <meta property="og:site_name" content="<?= e($siteName) ?>">
+    <meta property="og:title" content="<?= e($ogTitle) ?>">
+    <meta property="og:description" content="<?= e($ogDescription) ?>">
+    <meta property="og:image" content="<?= e($ogImage) ?>">
+    <meta property="og:image:url" content="<?= e($ogImage) ?>">
+    <meta property="og:image:secure_url" content="<?= e($ogImage) ?>">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="<?= e($siteName) ?> Digital Flyer">
+    <link rel="image_src" href="<?= e($ogImage) ?>">
+    <link rel="apple-touch-icon" href="<?= e($ogImage) ?>">
+
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:url" content="<?= e($ogUrl) ?>">
+    <meta name="twitter:title" content="<?= e($ogTitle) ?>">
+    <meta name="twitter:description" content="<?= e($ogDescription) ?>">
+    <meta name="twitter:image" content="<?= e($ogImage) ?>">
+
     <title><?= e($pageTitle) ?> — <?= e($siteName) ?></title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

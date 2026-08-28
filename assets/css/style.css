@@ -10,16 +10,13 @@
     --dark-sidebar: #1e1e2e;
 }
 
-html, body.app-body {
+body.app-body {
     background-color: #ffffff;
     font-family: 'DM Sans', sans-serif;
     color: #1f2937;
     margin: 0;
     padding: 0;
     min-height: 100vh;
-    width: 100%;
-    max-width: 100vw;
-    overflow-x: hidden !important;
 }
 
 .app-wrapper {
@@ -27,7 +24,7 @@ html, body.app-body {
     min-height: 100vh;
     width: 100%;
     max-width: 100vw;
-    overflow-x: hidden !important;
+    overflow-x: hidden;
 }
 
 /* Sidebar */
@@ -668,6 +665,121 @@ html, body.app-body {
 .badge-pending { background-color: rgba(245, 158, 11, 0.1); color: #f59e0b; }
 .badge-reversed { background-color: rgba(107, 114, 128, 0.1); color: #6b7280; }
 
+/* Transactions History Responsive Layout */
+.txn-history-table-wrapper {
+    width: 100%;
+    max-width: 100%;
+    overflow: hidden;
+}
+
+.txn-history-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+}
+
+.txn-history-table {
+    min-width: 720px;
+    margin-bottom: 0;
+    white-space: nowrap;
+}
+
+.txn-history-mobile-list {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 6px;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+}
+
+.txn-history-mobile-list::-webkit-scrollbar {
+    height: 6px;
+}
+
+.txn-history-mobile-list::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.16);
+    border-radius: 999px;
+}
+
+.txn-history-mobile-item {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: stretch;
+    gap: 12px;
+    min-width: 280px;
+    max-width: 280px;
+    flex: 0 0 280px;
+    padding: 14px;
+    border: 1px solid #f3f4f6;
+    border-radius: 14px;
+    background-color: #ffffff;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    scroll-snap-align: start;
+}
+
+.txn-history-mobile-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    min-width: 0;
+    flex: 1;
+}
+
+.txn-history-mobile-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.txn-history-mobile-info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.txn-history-mobile-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.txn-history-mobile-meta {
+    display: flex;
+    flex-direction: column;
+    font-size: 11px;
+    color: #6b7280;
+    gap: 2px;
+    word-break: break-all;
+}
+
+.txn-history-mobile-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    flex-shrink: 0;
+    text-align: right;
+}
+
+.txn-history-mobile-amount {
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
 /* Sidebar Overlay */
 .sidebar-overlay {
     display: none;
@@ -683,19 +795,16 @@ html, body.app-body {
 
 /* Strictly tables scroll horizontally */
 .table-responsive {
-    display: block !important;
-    width: 100% !important;
-    max-width: 100% !important;
     overflow-x: auto !important;
-    overflow-y: hidden !important;
     -webkit-overflow-scrolling: touch;
+    width: 100%;
+    max-width: 100%;
     margin-bottom: 0;
 }
 
 .table-responsive > table {
     white-space: nowrap !important;
-    width: 100% !important;
-    min-width: 600px !important;
+    width: 100%;
     margin-bottom: 0;
 }
 
@@ -746,6 +855,16 @@ html, body.app-body {
 @media (max-width: 575px) {
     .app-content {
         padding: 12px 10px;
+    }
+    .txn-history-mobile-item {
+        padding: 12px;
+        min-width: 250px;
+        max-width: 250px;
+        flex: 0 0 250px;
+    }
+    .txn-history-mobile-side {
+        align-items: flex-start;
+        text-align: left;
     }
     .wallet-card {
         padding: 18px 16px;

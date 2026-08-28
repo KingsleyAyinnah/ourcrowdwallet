@@ -151,3 +151,7 @@ define('DB_DATE_FORMAT',        'Y-m-d H:i:s');
 // ─── Cron ────────────────────────────────────────────────────────────────────
 define('CRON_SECRET',           'CHANGE_THIS_CRON_SECRET_IN_PRODUCTION');
 define('GAPS_POLL_INTERVAL',    60);            // seconds
+
+// ─── GTBank GAPS Gateway Defaults ────────────────────────────────────────────
+define('GAPS_BASE_URL_SANDBOX', 'https://gtweb6.gtbank.com/GSTPS/GAPS_FileUploader/FileUploader.asmx');
+define('GAPS_BASE_URL_LIVE',    'https://gtweb.gtbank.com/GSTPS/GAPS_FileUploader/FileUploader.asmx');

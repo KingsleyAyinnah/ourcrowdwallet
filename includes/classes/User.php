@@ -184,9 +184,21 @@ final class User
         }
     }
 
-    /** Verify a plain-text PIN against the stored hash. */
+    /** Verify a plain-text PIN against the stored hash with rate-limiting and brute-force protection. */
     public static function verifyPin(int $userId, string $pin): bool
     {
+        if (!validatePin($pin)) {
+            return false;
+        }
+
+        // Enforce rate limit (max 5 attempts per 15 minutes)
+        $rlKey = 'user_' . $userId;
+        $limit = rateLimit($rlKey, 'pin_verify', 5, 900);
+        if (!$limit['allowed']) {
+            writeLog(LOG_CHAN_WALLET, 'warning', 'User PIN verification rate-limited/locked', ['user_id' => $userId]);
+            return false;
+        }
+
         try {
             $row = Database::fetchOne(
                 'SELECT transaction_pin FROM users WHERE id = ? AND deleted_at IS NULL LIMIT 1',
@@ -195,7 +207,15 @@ final class User
             if (!$row || empty($row['transaction_pin'])) {
                 return false;
             }
-            return verifyPassword($pin, $row['transaction_pin']);
+            $verified = verifyPin($pin, $row['transaction_pin']);
+
+            if ($verified) {
+                clearRateLimit($rlKey, 'pin_verify');
+            } else {
+                writeLog(LOG_CHAN_WALLET, 'warning', 'Failed PIN attempt on user account', ['user_id' => $userId]);
+            }
+
+            return $verified;
         } catch (\Throwable $e) {
             error_log('[User::verifyPin] ' . $e->getMessage());
             return false;

@@ -180,7 +180,7 @@ if (isPost()) {
                     'code'       => $result['code'] ?? 'N/A',
                     'message'    => $result['message'] ?? 'N/A',
                 ]);
-                setFlash('error', 'Exam PIN purchase failed. Your wallet was not debited. Please try again or contact support.');
+                setFlash('error', getVtuUserFriendlyErrorMessage($result, 'exam'));
                 redirectTo('exam-pins');
             }
 

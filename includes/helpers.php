@@ -235,6 +235,7 @@ function server(string $key, mixed $default = ''): mixed
 function getClientIP(): string
 {
     $keys = [
+        'HTTP_CF_CONNECTING_IP', // Cloudflare real visitor IP
         'HTTP_CLIENT_IP',
         'HTTP_X_FORWARDED_FOR',
         'HTTP_X_REAL_IP',
@@ -243,7 +244,7 @@ function getClientIP(): string
     foreach ($keys as $key) {
         if (!empty($_SERVER[$key])) {
             $ip = trim(explode(',', $_SERVER[$key])[0]);
-            if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
+            if (filter_var($ip, FILTER_VALIDATE_IP)) {
                 return $ip;
             }
         }
@@ -394,7 +395,7 @@ function getBankCodeByName(string $bankName): string
 {
     $map = [
         'access bank'                               => '044',
-        'citibank'                                  => '043',
+        'citibank'                                  => '023',
         'ecobank'                                   => '050',
         'fidelity bank'                             => '070',
         'first bank'                                => '011',
@@ -408,21 +409,26 @@ function getBankCodeByName(string $bankName): string
         'gtbank'                                    => '058',
         'heritage bank'                             => '030',
         'keystone bank'                             => '082',
-        'lotus bank'                                => '302',
-        'moniepoint'                                => '120001',
-        'moniepoint mfb'                            => '120001',
-        'opay'                                      => '305',
-        'opay (digital wallet)'                     => '305',
-        'optimus bank'                              => '028',
-        'palmpay'                                   => '999991',
-        'paragon mfb'                               => '90543',
-        'premiumtrust bank'                         => '106',
+        'lotus bank'                                => '303',
+        'moniepoint'                                => '090405',
+        'moniepoint mfb'                            => '090405',
+        'moniepoint microfinance bank'              => '090405',
+        'opay'                                      => '100004',
+        'opay (digital wallet)'                     => '100004',
+        'opay digital services limited'             => '100004',
+        'paycom'                                    => '100004',
+        'optimus bank'                              => '107',
+        'palmpay'                                   => '100033',
+        'palmpay limited'                           => '100033',
+        'paragon mfb'                               => '51237',
+        'polaris bank'                              => '076',
+        'premiumtrust bank'                         => '105',
         'providus bank'                             => '101',
-        'signature bank'                            => '029',
-        'stanbic ibtc'                              => '039',
-        'stanbic ibtc bank'                         => '039',
+        'signature bank'                            => '106',
+        'stanbic ibtc'                              => '221',
+        'stanbic ibtc bank'                         => '221',
         'standard chartered bank'                   => '068',
-        'sterling bank'                             => '050',
+        'sterling bank'                             => '232',
         'suntrust bank'                             => '100',
         'taj bank'                                  => '302',
         'titan trust bank'                          => '102',
@@ -434,16 +440,83 @@ function getBankCodeByName(string $bankName): string
         'unity bank'                                => '215',
         'wema bank'                                 => '035',
         'zenith bank'                               => '057',
-        'kuda bank'                                 => '090267',
-        'kuda microfinance bank'                    => '090267',
-        'rubies mfb'                                => '090175',
-        'vfd microfinance bank'                     => '090110',
-        'carbon'                                    => '090267',
-        'fairmoney mfb'                             => '090551'
+        'kuda bank'                                 => '50211',
+        'kuda microfinance bank'                    => '50211',
+        'rubies mfb'                                => '125',
+        'vfd microfinance bank'                     => '566',
+        'carbon'                                    => '565',
+        'fairmoney mfb'                             => '51318',
+        'fairmoney microfinance bank'               => '51318'
     ];
 
     $key = trim(strtolower($bankName));
     return $map[$key] ?? '';
+}
+
+/**
+ * Get GTBank GAPS 9-digit Head Office sort code by bank name
+ */
+function getBankSortCodeByName(string $bankName): string
+{
+    $map = [
+        'access bank'                      => '044150291',
+        'citibank'                         => '023150005',
+        'ecobank'                          => '050150010',
+        'fidelity bank'                    => '070150003',
+        'first bank'                       => '011151003',
+        'first bank of nigeria'            => '011151003',
+        'first city monument bank'         => '214150018',
+        'first city monument bank (fcmb)'  => '214150018',
+        'fcmb'                             => '214150018',
+        'globus bank'                      => '103150103',
+        'guaranty trust bank'              => '058152052',
+        'guaranty trust bank (gtbank)'     => '058152052',
+        'gtbank'                           => '058152052',
+        'heritage bank'                    => '030150014',
+        'keystone bank'                    => '082150017',
+        'kuda bank'                        => '090150267',
+        'kuda microfinance bank'           => '090150267',
+        'lotus bank'                       => '302150302',
+        'moniepoint'                       => '120150120',
+        'moniepoint mfb'                   => '120150120',
+        'opay'                             => '305150305',
+        'opay (digital wallet)'            => '305150305',
+        'optimus bank'                     => '028150028',
+        'palmpay'                          => '999150999',
+        'paragon mfb'                      => '905150430',
+        'premiumtrust bank'                => '106150106',
+        'providus bank'                    => '101152019',
+        'signature bank'                   => '029150029',
+        'stanbic ibtc'                     => '221159522',
+        'stanbic ibtc bank'                => '221159522',
+        'standard chartered bank'          => '068150015',
+        'sterling bank'                    => '232150016',
+        'suntrust bank'                    => '100152049',
+        'taj bank'                         => '302150302',
+        'titan trust bank'                 => '102150102',
+        'union bank'                       => '032154568',
+        'union bank of nigeria'            => '032154568',
+        'united bank for africa'           => '033152048',
+        'united bank for africa (uba)'     => '033152048',
+        'uba'                              => '033152048',
+        'unity bank'                       => '215082334',
+        'vfd microfinance bank'            => '090150110',
+        'wema bank'                        => '035150103',
+        'zenith bank'                      => '057150013',
+        'carbon'                           => '090150267',
+        'fairmoney mfb'                    => '090150551',
+    ];
+
+    $key = trim(strtolower($bankName));
+    if (isset($map[$key])) {
+        return $map[$key];
+    }
+    $cbn = getBankCodeByName($bankName);
+    if (strlen($cbn) === 9) {
+        return $cbn;
+    }
+    $prefix = str_pad(substr($cbn, 0, 3), 3, '0', STR_PAD_LEFT);
+    return $prefix . '150' . $prefix;
 }
 
 /**
@@ -453,3 +526,79 @@ function isHttps(): bool
 {
     return (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || ($_SERVER['SERVER_PORT'] ?? 80) == 443;
 }
+
+/**
+ * Get unified visual icons, labels, colors, and badge background for transaction categories
+ */
+function getCategoryVisuals(string $cat): array
+{
+    return match (strtolower(trim($cat))) {
+        'deposit' => [
+            'icon'  => 'fas fa-arrow-down-left',
+            'label' => 'Deposit',
+            'bg'    => 'rgba(16, 185, 129, 0.12)',
+            'color' => '#10b981',
+        ],
+        'withdrawal' => [
+            'icon'  => 'fas fa-arrow-up-right',
+            'label' => 'Withdrawal',
+            'bg'    => 'rgba(239, 68, 68, 0.12)',
+            'color' => '#ef4444',
+        ],
+        'transfer' => [
+            'icon'  => 'fas fa-paper-plane',
+            'label' => 'Transfer',
+            'bg'    => 'rgba(99, 102, 241, 0.12)',
+            'color' => '#6366f1',
+        ],
+        'airtime' => [
+            'icon'  => 'fas fa-phone-alt',
+            'label' => 'Airtime',
+            'bg'    => 'rgba(245, 158, 11, 0.12)',
+            'color' => '#f59e0b',
+        ],
+        'data' => [
+            'icon'  => 'fas fa-wifi',
+            'label' => 'Data Bundle',
+            'bg'    => 'rgba(14, 165, 233, 0.12)',
+            'color' => '#0ea5e9',
+        ],
+        'cable_tv', 'cable', 'tv' => [
+            'icon'  => 'fas fa-tv',
+            'label' => 'Cable TV',
+            'bg'    => 'rgba(168, 85, 247, 0.12)',
+            'color' => '#a855f7',
+        ],
+        'electricity', 'electric', 'power' => [
+            'icon'  => 'fas fa-bolt',
+            'label' => 'Electricity',
+            'bg'    => 'rgba(234, 179, 8, 0.15)',
+            'color' => '#ca8a04',
+        ],
+        'betting', 'bet' => [
+            'icon'  => 'fas fa-futbol',
+            'label' => 'Betting Funding',
+            'bg'    => 'rgba(20, 184, 166, 0.12)',
+            'color' => '#14b8a6',
+        ],
+        'exam_pin', 'exam', 'waec', 'jamb', 'neco' => [
+            'icon'  => 'fas fa-graduation-cap',
+            'label' => 'Exam Pin',
+            'bg'    => 'rgba(236, 72, 153, 0.12)',
+            'color' => '#ec4899',
+        ],
+        'referral_bonus', 'bonus' => [
+            'icon'  => 'fas fa-gift',
+            'label' => 'Referral Bonus',
+            'bg'    => 'rgba(16, 185, 129, 0.12)',
+            'color' => '#10b981',
+        ],
+        default => [
+            'icon'  => 'fas fa-receipt',
+            'label' => ucfirst(str_replace('_', ' ', $cat)),
+            'bg'    => 'rgba(107, 114, 128, 0.12)',
+            'color' => '#6b7280',
+        ],
+    };
+}
+

@@ -635,10 +635,11 @@ class VTpass
     {
         $raw = self::request(VTPASS_ENDPOINT_BALANCE, [], 'GET');
 
-        $balance = $raw['Wallet_balance'] ?? $raw['wallet_balance'] ?? $raw['balance'] ?? null;
+        $balance = $raw['Wallet_balance'] ?? $raw['wallet_balance'] ?? $raw['balance'] ?? 
+                   $raw['contents']['balance'] ?? $raw['contents']['wallet_balance'] ?? null;
 
         $success = isset($raw['code'])
-            ? in_array((string) $raw['code'], self::SUCCESS_CODES, true)
+            ? in_array((string) $raw['code'], ['000', '1', '200'], true)
             : $balance !== null;
 
         $response = [
@@ -655,6 +656,86 @@ class VTpass
         self::logCall('getBalance', [], $response);
 
         return $response;
+    }
+
+    /**
+     * Get the live VTpass API wallet balance specifically, bypassing sandbox settings if active.
+     *
+     * @return array Normalized response
+     */
+    public static function getLiveBalance(): array
+    {
+        $liveApiKey    = setting('vtpass_live_api_key', '');
+        $livePublicKey = setting('vtpass_live_public_key', '');
+        $liveSecretKey = setting('vtpass_live_secret_key', '');
+
+        // If live credentials are empty, fallback to default getBalance
+        if (empty($liveApiKey) && empty($livePublicKey) && empty($liveSecretKey)) {
+            return self::getBalance();
+        }
+
+        // Build headers manually using live credentials
+        $headers = [
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'api-key: '    . $liveApiKey,
+            'public-key: ' . $livePublicKey,
+            'secret-key: ' . $liveSecretKey,
+        ];
+
+        // Core HTTP Request logic simplified for live balance lookup
+        set_time_limit(120);
+        $endpoint = 'https://vtpass.com/api/balance';
+        
+        $ch = curl_init();
+        $curlOpts = [
+            CURLOPT_URL            => $endpoint,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 25,
+            CURLOPT_CONNECTTIMEOUT => 10,
+            CURLOPT_HTTPHEADER     => $headers,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_HTTPGET        => true,
+        ];
+        curl_setopt_array($ch, $curlOpts);
+        $rawResponse = curl_exec($ch);
+        $curlErrno   = curl_errno($ch);
+        curl_close($ch);
+
+        if ($curlErrno !== 0 || empty($rawResponse)) {
+            return [
+                'success' => false,
+                'message' => 'Connection failed or empty response from live VTpass API.',
+                'data'    => ['balance' => null]
+            ];
+        }
+
+        $raw = json_decode($rawResponse, true);
+        if (json_last_error() !== JSON_ERROR_NONE || !is_array($raw)) {
+            return [
+                'success' => false,
+                'message' => 'Invalid JSON response from live VTpass API.',
+                'data'    => ['balance' => null]
+            ];
+        }
+
+        $balance = $raw['Wallet_balance'] ?? $raw['wallet_balance'] ?? $raw['balance'] ?? 
+                   $raw['contents']['balance'] ?? $raw['contents']['wallet_balance'] ?? null;
+        $success = isset($raw['code'])
+            ? in_array((string)$raw['code'], ['000', '1', '200'], true)
+            : $balance !== null;
+
+        return [
+            'success'   => $success,
+            'message'   => (string)($raw['response_description'] ?? ($success ? 'Live balance retrieved' : 'Failed')),
+            'code'      => (string)($raw['code'] ?? ''),
+            'reference' => '',
+            'token'     => null,
+            'data'      => [
+                'balance' => $balance,
+            ],
+        ];
     }
 
     // ─── Database Operations ──────────────────────────────────────────────────

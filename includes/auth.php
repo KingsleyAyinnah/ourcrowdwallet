@@ -92,6 +92,11 @@ function requireAuth(): void
         setFlash('error', 'Your account has been banned.');
         redirectTo('login');
     }
+
+    // Administrators and staff must never access user dashboard/pages
+    if (hasRole('admin', 'superadmin', 'support')) {
+        redirectTo('admin/dashboard');
+    }
 }
 
 /**
@@ -116,9 +121,9 @@ function requireAdmin(): void
         redirectTo('admin/login');
     }
 
-    if (!hasRole('admin', 'superadmin')) {
-        http_response_code(403);
-        redirectTo('dashboard');
+    if (!hasRole('admin', 'superadmin', 'support')) {
+        setFlash('error', 'Access denied. Administrator privileges required.');
+        redirectTo('admin/login');
     }
 }
 
@@ -615,7 +620,7 @@ function resetPassword(string $token, string $password): array
         Database::beginTransaction();
 
         Database::execute(
-            'UPDATE users SET password_hash = ? WHERE id = ?',
+            'UPDATE users SET password_hash = ?, remember_token = NULL WHERE id = ?',
             [hashPassword($password), $record['user_id']]
         );
 

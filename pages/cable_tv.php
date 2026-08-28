@@ -128,7 +128,7 @@ if (isPost()) {
                         'user_id' => $user['id'], 'service_id' => $serviceId,
                         'code' => $result['code'] ?? 'N/A', 'message' => $result['message'] ?? 'N/A',
                     ]);
-                    setFlash('error', 'Cable TV subscription failed. Your wallet was not debited. Please try again or contact support.');
+                    setFlash('error', getVtuUserFriendlyErrorMessage($result, 'tv'));
                     redirectTo('cable-tv');
                 }
 

@@ -335,8 +335,18 @@ class Wallet
             return ['success' => false, 'message' => 'Withdrawal service is temporarily unavailable.', 'reference' => ''];
         }
 
-        // ── Rate limit (5 requests per hour per user)
+        // ── Double-submit / concurrent request lock (1 request per 10 seconds per user)
         $rlKey = 'user_' . $userId;
+        $lock  = rateLimit($rlKey, 'withdrawal_concurrent_lock', 1, 10);
+        if (!$lock['allowed']) {
+            return [
+                'success'   => false,
+                'message'   => 'A withdrawal request is currently being processed for your account. Please wait a moment.',
+                'reference' => '',
+            ];
+        }
+
+        // ── Hourly rate limit (5 requests per hour per user)
         $limit = rateLimit($rlKey, 'withdrawal', 5, 3600);
         if (!$limit['allowed']) {
             $wait = ceil($limit['retry_after'] / 60);
@@ -414,6 +424,20 @@ class Wallet
                 ]
             );
 
+            // Ensure remark column exists in withdrawals table schema
+            static $remarkChecked = false;
+            if (!$remarkChecked) {
+                try {
+                    $hasRemark = \Database::fetchOne("SHOW COLUMNS FROM withdrawals LIKE 'remark'");
+                    if (empty($hasRemark)) {
+                        \Database::execute("ALTER TABLE withdrawals ADD COLUMN remark VARCHAR(255) NULL AFTER account_name");
+                    }
+                } catch (\Throwable $e) {
+                    // ignore if already added or restricted
+                }
+                $remarkChecked = true;
+            }
+
             // Create withdrawal record
             \Database::insert(
                 'INSERT INTO withdrawals
@@ -450,30 +474,78 @@ class Wallet
             if ($bankCode === '') {
                 throw new \RuntimeException('Selected bank is currently unsupported for automated GAPS payouts.');
             }
+
+            // 1. Send Single Transfer Request
             $gapsResult = \Ourcr\GAPS\GAPS::processWithdrawal(
                 accountNumber: $accountNumber,
                 accountName:   $accountName,
                 bankCode:      $bankCode,
                 amount:        $amount,
                 reference:     $reference,
-                narration:     'Automated withdrawal payout'
+                narration:     'Automated withdrawal payout',
+                bankName:      $bankName
             );
 
-            if ($gapsResult['success']) {
-                \Database::execute(
-                    "UPDATE withdrawals SET status = 'success', processed_at = NOW(), gaps_reference = ?, gaps_response = ? WHERE wallet_txn_id = ?",
-                    [$gapsResult['reference'] ?? $reference, json_encode($gapsResult['data']), $txnId]
-                );
+            writeLog(LOG_CHAN_WALLET, 'info', 'GAPS SingleTransfers_Enc execution complete', [
+                'user_id'       => $userId,
+                'reference'     => $reference,
+                'single_result' => $gapsResult,
+            ]);
 
-                writeLog(LOG_CHAN_WALLET, 'info', 'Withdrawal payout successful via GAPS', [
+            $requeryResult = null;
+            $isRequerySuccess = false;
+            $finalMessage = $gapsResult['message'] ?? 'Withdrawal Processed';
+            $finalCode    = (string)($gapsResult['code'] ?? '');
+
+            $isNetworkTimeout = in_array($finalCode, ['NETWORK_ERROR', 'TIMEOUT', 'CURL_ERROR', '0', '504', '502'], true) 
+                || str_contains(strtolower($finalMessage), 'timed out') 
+                || str_contains(strtolower($finalMessage), 'curl error');
+
+            $needsRequery = !empty($gapsResult['success']) || $isNetworkTimeout;
+
+            if ($needsRequery) {
+                // If the single transfer timed out, give the bank switch 2 seconds before checking status
+                if ($isNetworkTimeout) {
+                    sleep(2);
+                }
+
+                writeLog(LOG_CHAN_WALLET, 'info', 'Executing GAPS TransactionRequery_Enc status verification', [
                     'user_id'   => $userId,
                     'reference' => $reference,
-                    'gaps_ref'  => $gapsResult['reference'] ?? $reference,
+                    'is_timeout_recovery' => $isNetworkTimeout
+                ]);
+
+                $requeryResult = \Ourcr\GAPS\GAPS::requeryTransaction($reference);
+
+                writeLog(LOG_CHAN_WALLET, 'info', 'GAPS TransactionRequery_Enc execution complete', [
+                    'user_id'        => $userId,
+                    'reference'      => $reference,
+                    'requery_result' => $requeryResult,
+                ]);
+
+                $isRequerySuccess = !empty($requeryResult['success']);
+                $finalMessage     = $requeryResult['message'] ?? $finalMessage;
+                $finalCode        = $requeryResult['code'] ?? $finalCode;
+            } else {
+                $isRequerySuccess = false;
+            }
+
+            if ($isRequerySuccess) {
+                // Update database status to success
+                \Database::execute(
+                    "UPDATE withdrawals SET status = 'success', processed_at = NOW(), gaps_reference = ?, gaps_response = ? WHERE wallet_txn_id = ?",
+                    [$reference, json_encode(['single_transfer' => $gapsResult['data'] ?? [], 'requery' => $requeryResult['data'] ?? []]), $txnId]
+                );
+
+                writeLog(LOG_CHAN_WALLET, 'info', 'Withdrawal payout confirmed successful via GAPS Requery', [
+                    'user_id'   => $userId,
+                    'reference' => $reference,
+                    'code'      => $finalCode,
                 ]);
 
                 auditLog(
                     'withdrawal_processed_gaps',
-                    'Withdrawal of ' . formatMoney($amount) . " to {$bankName} ({$accountNumber}) was paid out via GAPS.",
+                    'Withdrawal of ' . formatMoney($amount) . " to {$bankName} ({$accountNumber}) was verified successful via GAPS Requery.",
                     'withdrawal',
                     $userId,
                     ['amount' => $amount, 'fee' => $fee, 'reference' => $reference]
@@ -491,14 +563,15 @@ class Wallet
                     'success'   => true,
                     'message'   => 'Your withdrawal of ' . formatMoney($amount) . ' was processed and paid out successfully.',
                     'reference' => $reference,
+                    'auto_paid' => true,
                 ];
             } else {
-                // If GAPS fails, set withdrawals status to failed, revert wallet transactions, and refund
+                // Requery returned failure: set status to failed, revert wallet transactions, and refund
                 \Database::beginTransaction();
                 try {
                     \Database::execute(
                         "UPDATE withdrawals SET status = 'failed', failure_reason = ?, gaps_response = ? WHERE wallet_txn_id = ?",
-                        ['GAPS failed: ' . $gapsResult['message'], json_encode($gapsResult), $txnId]
+                        ['GAPS Requery failed: ' . $finalMessage, json_encode(['single_transfer' => $gapsResult['data'] ?? [], 'requery' => $requeryResult['data'] ?? [], 'error' => $finalMessage]), $txnId]
                     );
 
                     \Database::execute(
@@ -514,20 +587,21 @@ class Wallet
                         category:    TXN_TYPE_DEPOSIT,
                         description: 'Refund for failed withdrawal ' . $reference,
                         reference:   'RF-' . $reference,
-                        meta:        ['original_reference' => $reference]
+                        meta:        ['original_reference' => $reference, 'reason' => $finalMessage]
                     );
 
                     \Database::commit();
 
-                    writeLog(LOG_CHAN_WALLET, 'error', 'Withdrawal payout failed via GAPS, refunded', [
+                    writeLog(LOG_CHAN_WALLET, 'error', 'Withdrawal payout failed via GAPS Requery, refunded', [
                         'user_id'   => $userId,
                         'reference' => $reference,
-                        'error'     => $gapsResult['message'],
+                        'error'     => $finalMessage,
+                        'code'      => $finalCode,
                     ]);
 
                     auditLog(
                         'withdrawal_failed_gaps',
-                        'Withdrawal of ' . formatMoney($amount) . " to {$bankName} ({$accountNumber}) failed: " . $gapsResult['message'] . ". Refunded.",
+                        'Withdrawal of ' . formatMoney($amount) . " to {$bankName} ({$accountNumber}) failed via Requery: " . $finalMessage . ". Refunded.",
                         'withdrawal',
                         $userId,
                         ['amount' => $amount, 'fee' => $fee, 'reference' => $reference]
@@ -537,18 +611,20 @@ class Wallet
                         $userId,
                         NOTIF_ERROR,
                         'Withdrawal Failed',
-                        'Your withdrawal of ' . formatMoney($amount) . ' failed: ' . $gapsResult['message'] . '. Funds have been refunded to your wallet.',
+                        'Your withdrawal of ' . formatMoney($amount) . ' to ' . $bankName . ' (' . $accountNumber . ') failed. Funds have been refunded to your wallet.',
                         APP_URL . '/wallet/transactions'
                     );
 
                     return [
                         'success'   => false,
-                        'message'   => 'Withdrawal payout failed: ' . $gapsResult['message'] . '. Your wallet has been refunded.',
+                        'message'   => 'Withdrawal request failed: ' . $finalMessage . '. Your wallet has been refunded.',
                         'reference' => $reference,
                     ];
-                } catch (\Exception $ex2) {
-                    \Database::rollback();
-                    throw $ex2;
+                } catch (\Throwable $rollbackEx) {
+                    if (\Database::inTransaction()) {
+                        \Database::rollBack();
+                    }
+                    throw $rollbackEx;
                 }
             }
         } catch (\Exception $e) {
@@ -560,9 +636,13 @@ class Wallet
                 'error'     => $e->getMessage(),
             ]);
 
+            $errMessage = $e->getMessage();
+            if (empty($errMessage)) {
+                $errMessage = 'Withdrawal request failed. Please try again or contact support.';
+            }
             return [
                 'success'   => false,
-                'message'   => 'Withdrawal request failed. Please try again or contact support.',
+                'message'   => $errMessage,
                 'reference' => '',
             ];
         }
@@ -783,7 +863,8 @@ class Wallet
         int     $perPage = 20,
         ?string $category = null,
         ?string $status = null,
-        ?string $type = null
+        ?string $type = null,
+        ?string $search = null
     ): array {
         $page    = max(1, $page);
         $perPage = max(1, min(100, $perPage));
@@ -804,6 +885,13 @@ class Wallet
         if ($type !== null && $type !== '') {
             $conditions[] = 'wt.type = ?';
             $params[]     = $type;
+        }
+
+        if ($search !== null && trim($search) !== '') {
+            $conditions[] = '(wt.reference LIKE ? OR wt.description LIKE ?)';
+            $searchWild = '%' . trim($search) . '%';
+            $params[]     = $searchWild;
+            $params[]     = $searchWild;
         }
 
         $where = 'WHERE ' . implode(' AND ', $conditions);

@@ -59,8 +59,13 @@ if (isPost()) {
     try {
         requireCsrf();
 
-        // Handle test email request
-        if (isset($_POST['action']) && $_POST['action'] === 'test_email') {
+        // Handle clear rate limits request
+        if (isset($_POST['action']) && $_POST['action'] === 'clear_rate_limits') {
+            requireCsrf();
+            Database::execute("DELETE FROM rate_limits");
+            auditLog('ADMIN_RATE_LIMITS_CLEARED', "Cleared all platform rate limit security locks", 'settings', $adminUser['id']);
+            $success = "All security rate limit locks have been cleared successfully.";
+        } elseif (isset($_POST['action']) && $_POST['action'] === 'test_email') {
             requireCsrf();
             
             // Clean any output buffer to prevent warnings/notices from corrupting the JSON response
@@ -122,79 +127,79 @@ if (isPost()) {
                 echo json_encode(['success' => false, 'message' => 'Failed to send test email: ' . $e->getMessage()]);
                 exit;
             }
-        }
+        } else {
+            $settingsToSave = $_POST;
+            unset($settingsToSave['csrf_token']); // remove token
 
-        $settingsToSave = $_POST;
-        unset($settingsToSave['csrf_token']); // remove token
+            // Handle Admin Account settings if provided
+            if (isset($settingsToSave['admin_first_name'])) {
+                $firstName = sanitizeString($settingsToSave['admin_first_name']);
+                $lastName  = sanitizeString($settingsToSave['admin_last_name']);
+                $email     = sanitizeString($settingsToSave['admin_email']);
+                $password  = $settingsToSave['admin_password'];
 
-        // Handle Admin Account settings if provided
-        if (isset($settingsToSave['admin_first_name'])) {
-            $firstName = sanitizeString($settingsToSave['admin_first_name']);
-            $lastName  = sanitizeString($settingsToSave['admin_last_name']);
-            $email     = sanitizeString($settingsToSave['admin_email']);
-            $password  = $settingsToSave['admin_password'];
+                unset($settingsToSave['admin_first_name']);
+                unset($settingsToSave['admin_last_name']);
+                unset($settingsToSave['admin_email']);
+                unset($settingsToSave['admin_password']);
 
-            unset($settingsToSave['admin_first_name']);
-            unset($settingsToSave['admin_last_name']);
-            unset($settingsToSave['admin_email']);
-            unset($settingsToSave['admin_password']);
-
-            if (empty($firstName) || empty($lastName) || empty($email)) {
-                throw new Exception("All admin account fields are required.");
-            }
-
-            Database::execute(
-                "UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?",
-                [$firstName, $lastName, $email, $adminUser['id']]
-            );
-
-            if (!empty($password)) {
-                if (strlen($password) < 6) {
-                    throw new Exception("Password must be at least 6 characters.");
+                if (empty($firstName) || empty($lastName) || empty($email)) {
+                    throw new Exception("All admin account fields are required.");
                 }
-                $hashed = password_hash($password, PASSWORD_DEFAULT);
-                Database::execute(
-                    "UPDATE users SET password = ? WHERE id = ?",
-                    [$hashed, $adminUser['id']]
-                );
-            }
-        }
 
-        // Normalise checkbox-style settings: if missing from POST, they were unchecked → save as '0'
-        $checkboxSettings = ['email_notifications_enabled'];
-        foreach ($checkboxSettings as $cbKey) {
-            if (!array_key_exists($cbKey, $settingsToSave)) {
-                $settingsToSave[$cbKey] = '0';
-            }
-        }
-
-        // Save system configuration settings to site_settings table
-        foreach ($settingsToSave as $key => $val) {
-            // For PEM keys or secrets, don't strip format
-            if (
-                strpos($key, 'gaps_private_key') === false && 
-                strpos($key, 'gaps_public_key') === false && 
-                strpos($key, 'gaps_server_public_key') === false
-            ) {
-                $val = sanitizeString($val);
-            }
-            
-            $exists = Database::fetchOne("SELECT id FROM site_settings WHERE setting_key = ? LIMIT 1", [$key]);
-            if ($exists) {
                 Database::execute(
-                    "UPDATE site_settings SET setting_value = ?, updated_at = NOW() WHERE setting_key = ?",
-                    [$val, $key]
+                    "UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?",
+                    [$firstName, $lastName, $email, $adminUser['id']]
                 );
-            } else {
-                Database::execute(
-                    "INSERT INTO site_settings (setting_key, setting_value, setting_group, label, updated_at) VALUES (?, ?, 'general', ?, NOW())",
-                    [$key, $val, ucwords(str_replace('_', ' ', $key))]
-                );
-            }
-        }
 
-        auditLog('ADMIN_SETTINGS_UPDATED', "Updated platform system settings and credentials config values", 'settings', $adminUser['id']);
-        $success = "Platform configuration saved successfully.";
+                if (!empty($password)) {
+                    if (strlen($password) < 6) {
+                        throw new Exception("Password must be at least 6 characters.");
+                    }
+                    $hashed = password_hash($password, PASSWORD_DEFAULT);
+                    Database::execute(
+                        "UPDATE users SET password = ? WHERE id = ?",
+                        [$hashed, $adminUser['id']]
+                    );
+                }
+            }
+
+            // Normalise checkbox-style settings: if missing from POST, they were unchecked → save as '0'
+            $checkboxSettings = ['email_notifications_enabled'];
+            foreach ($checkboxSettings as $cbKey) {
+                if (!array_key_exists($cbKey, $settingsToSave)) {
+                    $settingsToSave[$cbKey] = '0';
+                }
+            }
+
+            // Save system configuration settings to site_settings table
+            foreach ($settingsToSave as $key => $val) {
+                // For PEM keys or secrets, don't strip format
+                if (
+                    strpos($key, 'gaps_private_key') === false && 
+                    strpos($key, 'gaps_public_key') === false && 
+                    strpos($key, 'gaps_server_public_key') === false
+                ) {
+                    $val = sanitizeString($val);
+                }
+                
+                $exists = Database::fetchOne("SELECT id FROM site_settings WHERE setting_key = ? LIMIT 1", [$key]);
+                if ($exists) {
+                    Database::execute(
+                        "UPDATE site_settings SET setting_value = ?, updated_at = NOW() WHERE setting_key = ?",
+                        [$val, $key]
+                    );
+                } else {
+                    Database::execute(
+                        "INSERT INTO site_settings (setting_key, setting_value, setting_group, label, updated_at) VALUES (?, ?, 'general', ?, NOW())",
+                        [$key, $val, ucwords(str_replace('_', ' ', $key))]
+                    );
+                }
+            }
+
+            auditLog('ADMIN_SETTINGS_UPDATED', "Updated platform system settings and credentials config values", 'settings', $adminUser['id']);
+            $success = "Platform configuration saved successfully.";
+        }
         $adminUser = currentUser(); // refresh details
 
     } catch (Exception $e) {
@@ -276,16 +281,19 @@ include ADMIN_PATH . '/includes/header.php';
                                         <label for="site_email" class="form-label small">Support Email</label>
                                         <input type="email" class="form-control" id="site_email" name="site_email" value="<?= e($settings['site_email'] ?? '') ?>">
                                     </div>
-                                    <div class="mb-3">
-                                        <label for="site_phone" class="form-label small">Support Phone</label>
-                                        <input type="text" class="form-control" id="site_phone" name="site_phone" value="<?= e($settings['site_phone'] ?? '') ?>">
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="allow_registration" class="form-label small">Allow Customer Registrations</label>
-                                        <select class="form-select" id="allow_registration" name="allow_registration">
-                                            <option value="1" <?= ($settings['allow_registration'] ?? '1') === '1' ? 'selected' : '' ?>>Enabled</option>
-                                            <option value="0" <?= ($settings['allow_registration'] ?? '1') === '0' ? 'selected' : '' ?>>Disabled</option>
-                                        </select>
+                                     <div class="mb-3">
+                                         <label for="allow_registration" class="form-label small">Allow Customer Registrations</label>
+                                         <select class="form-select" id="allow_registration" name="allow_registration">
+                                             <option value="1" <?= ($settings['allow_registration'] ?? '1') === '1' ? 'selected' : '' ?>>Enabled</option>
+                                             <option value="0" <?= ($settings['allow_registration'] ?? '1') === '0' ? 'selected' : '' ?>>Disabled</option>
+                                         </select>
+                                     </div>
+                                     <div class="border-top pt-4 mt-4">
+                                        <h6 class="fw-bold text-danger mb-2"><i class="fas fa-shield-alt me-2"></i>Security Rate Limit Locks</h6>
+                                        <p class="small text-muted mb-3">If users or administrators receive "Too many attempts" locks on login, OTP, or withdrawals, click the button below to instantly clear all active rate limit locks.</p>
+                                        <button type="submit" name="action" value="clear_rate_limits" class="btn btn-outline-danger py-2 px-4 rounded-8" onclick="return confirm('Are you sure you want to clear all security rate limit locks?');">
+                                            <i class="fas fa-unlock me-2"></i>Clear All Security Rate Limits
+                                        </button>
                                     </div>
                                 </div>
 

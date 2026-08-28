@@ -6,8 +6,12 @@
 defined('OURCR_ONLINE') or die('Direct access not permitted.');
 
 // Redirect if already logged in as admin
-if (isLoggedIn() && hasRole('admin', 'superadmin')) {
-    redirectTo('admin/dashboard');
+if (isLoggedIn()) {
+    if (hasRole('support')) {
+        redirectTo('admin/support');
+    } elseif (hasRole('admin', 'superadmin')) {
+        redirectTo('admin/dashboard');
+    }
 }
 
 $error = '';
@@ -37,7 +41,7 @@ if (isPost()) {
                 } elseif ($user['status'] === 'banned') {
                     setFlash('error', "Your account is permanently banned.");
                     redirectTo('admin/login');
-                } elseif (!in_array($user['role'], ['admin', 'superadmin'])) {
+                } elseif (!in_array($user['role'], ['admin', 'superadmin', 'support'], true)) {
                     setFlash('error', "Access Forbidden: Admin privileges required.");
                     redirectTo('admin/login');
                 } else {
@@ -46,7 +50,11 @@ if (isPost()) {
                     auditLog('ADMIN_LOGIN', "Logged into admin panel from " . getClientIP(), 'users', $user['id']);
                     
                     setFlash('success', 'Welcome back to admin command panel.');
-                    redirectTo('admin/dashboard');
+                    if ($user['role'] === 'support') {
+                        redirectTo('admin/support');
+                    } else {
+                        redirectTo('admin/dashboard');
+                    }
                 }
             } else {
                 setFlash('error', "Invalid credential combinations.");

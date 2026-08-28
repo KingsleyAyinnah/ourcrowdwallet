@@ -1024,3 +1024,72 @@ function triggerDeveloperVtuCommissionShare(array $txn): void
         error_log('[triggerDeveloperVtuCommissionShare] Error: ' . $e->getMessage());
     }
 }
+
+/**
+ * Maps VTpass API response codes or logs to clean, human-readable user messages.
+ */
+function getVtuUserFriendlyErrorMessage(array $result, string $serviceType): string
+{
+    $code = (string)($result['code'] ?? '');
+    $apiMsg = trim((string)($result['message'] ?? ''));
+
+    $map = [
+        '011' => 'Invalid transaction details or parameters. Please double-check your inputs.',
+        '012' => 'The selected product or billing provider is currently not supported.',
+        '013' => 'The entered amount is below the minimum allowed limit for this service.',
+        '014' => 'Duplicate request detected. Please wait a moment and try again.',
+        '015' => 'Invalid transaction request ID.',
+        '016' => 'The transaction failed. Please verify your details or try again later.',
+        '017' => 'The entered amount exceeds the maximum allowed limit for this service.',
+        '018' => 'System maintenance error. Please contact system support.',
+        '019' => 'Duplicate transaction detected. Please wait a few minutes before resubmitting.',
+        '021' => 'API authorization failure. Please contact administrator support.',
+        '022' => 'Invalid customer phone number. Please check and try again.',
+        '023' => 'Invalid decoder/smartcard number. Please check and try again.',
+        '024' => 'Invalid transaction amount. Please check and try again.',
+        '025' => 'Invalid meter number. Please check the meter number and try again.',
+        '027' => 'Server IP address is not whitelisted. Please authorize it on the developer portal.',
+        '028' => 'This product/service is not enabled on your VTpass account. Please contact VTpass support to activate it for your API keys.',
+        '030' => 'The billing provider is currently offline or unreachable. Please try again later.',
+        '087' => 'Service provider is temporarily busy. Your wallet was not debited. Please try again.',
+        'NETWORK_ERROR' => 'Connection timeout. Your wallet was not debited. Please check your internet or try again.',
+    ];
+
+    if (isset($map[$code])) {
+        if ($code === '027') {
+            return 'Purchase failed: Server IP (' . ($_SERVER['SERVER_ADDR'] ?? 'N/A') . ') is not whitelisted on your VTpass account. Please whitelist this IP on your VTpass developer dashboard.';
+        }
+        return $map[$code];
+    }
+
+    if (!empty($apiMsg)) {
+        if (stripos($apiMsg, 'duplicate') !== false) {
+            return 'Duplicate transaction detected. Please wait a few minutes before resubmitting.';
+        }
+        if (stripos($apiMsg, 'product') !== false && stripos($apiMsg, 'whitelisted') !== false) {
+            return 'This product/service is not enabled on your VTpass account. Please contact VTpass support to activate it for your API keys.';
+        }
+        if (stripos($apiMsg, 'not whitelisted') !== false) {
+            return 'Purchase failed: Server IP (' . ($_SERVER['SERVER_ADDR'] ?? 'N/A') . ') is not whitelisted on your VTpass account. Please whitelist this IP on your VTpass developer dashboard.';
+        }
+        if (stripos($apiMsg, 'balance') !== false || stripos($apiMsg, 'funds') !== false) {
+            return 'Service temporarily unavailable due to funding limits. Please try again or contact support.';
+        }
+        if (stripos($apiMsg, 'timeout') !== false || stripos($apiMsg, 'time out') !== false) {
+            return 'The transaction request timed out. Your wallet was not debited. Please try again.';
+        }
+        return $apiMsg;
+    }
+
+    $serviceName = match($serviceType) {
+        'airtime'     => 'Airtime purchase',
+        'data'        => 'Data bundle purchase',
+        'electricity' => 'Electricity utility token payment',
+        'cable_tv', 'tv' => 'Cable TV subscription',
+        'exam'        => 'Exam PIN purchase',
+        'betting'     => 'Betting wallet funding',
+        default       => 'Transaction',
+    };
+
+    return "$serviceName failed. Your wallet was not debited. Please try again or contact support.";
+}

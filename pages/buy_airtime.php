@@ -113,7 +113,7 @@ if (isPost()) {
                         'user_id' => $user['id'], 'service_id' => $serviceId,
                         'code' => $result['code'] ?? 'N/A', 'message' => $result['message'] ?? 'N/A',
                     ]);
-                    setFlash('error', 'Airtime purchase failed. Your wallet was not debited. Please try again or contact support.');
+                    setFlash('error', getVtuUserFriendlyErrorMessage($result, 'airtime'));
                     redirectTo('buy-airtime');
                 }
 
