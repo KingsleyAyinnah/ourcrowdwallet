@@ -469,8 +469,9 @@ function sendMail(string $to, string $toName, string $subject, string $htmlBody)
  */
 function sendVerificationEmail(string $email, string $name, string $token): void
 {
-    $link    = APP_URL . '/verify-email?token=' . urlencode($token);
-    $subject = 'Verify Your Email - ' . APP_NAME;
+    $baseUrl = rtrim(setting('site_url', defined('APP_URL') ? APP_URL : 'http://localhost/ourcr'), '/');
+    $link    = $baseUrl . '/verify-email?token=' . urlencode($token);
+    $subject = 'Verify Your Email - ' . setting('site_name', defined('APP_NAME') ? APP_NAME : 'OURCR ONLINE');
     $body    = emailTemplate('verification', [
         'name'  => $name,
         'link'  => $link,
@@ -497,11 +498,13 @@ function sendOtpEmail(string $email, string $name, string $otp): void
  */
 function sendPasswordResetEmail(string $email, string $name, string $token): void
 {
-    $link    = APP_URL . '/reset-password?token=' . urlencode($token);
-    $subject = 'Reset Your Password - ' . APP_NAME;
+    $baseUrl = rtrim(setting('site_url', defined('APP_URL') ? APP_URL : 'http://localhost/ourcr'), '/');
+    $link    = $baseUrl . '/reset-password?token=' . urlencode($token);
+    $subject = 'Reset Your Password - ' . setting('site_name', defined('APP_NAME') ? APP_NAME : 'OURCR ONLINE');
     $body    = emailTemplate('password_reset', [
         'name'  => $name,
         'link'  => $link,
+        'token' => $token,
     ]);
     sendMail($email, $name, $subject, $body);
 }
@@ -511,16 +514,19 @@ function sendPasswordResetEmail(string $email, string $name, string $token): voi
  */
 function emailTemplate(string $type, array $vars): string
 {
-    $appName  = setting('site_name', defined('APP_NAME') ? APP_NAME : 'OURCR ONLINE');
-    $appUrl   = rtrim(setting('site_url', defined('APP_URL') ? APP_URL : 'http://localhost/ourcr'), '/');
-    $year     = date('Y');
-    $color    = setting('site_color', defined('DEFAULT_SITE_COLOR') ? DEFAULT_SITE_COLOR : '#DC2626');
-    $name     = '';
-    $link     = '';
+    $appName   = setting('site_name', defined('APP_NAME') ? APP_NAME : 'OURCR ONLINE');
+    $appUrl    = rtrim(setting('site_url', defined('APP_URL') ? APP_URL : 'http://localhost/ourcr'), '/');
+    $year      = date('Y');
+    $color     = setting('site_color', defined('DEFAULT_SITE_COLOR') ? DEFAULT_SITE_COLOR : '#DC2626');
+    $name      = !empty($vars['name']) ? $vars['name'] : 'Valued Customer';
+    $link      = $vars['link'] ?? '';
+    $token     = $vars['token'] ?? '';
+    $otp       = $vars['otp'] ?? '';
+    $title     = $vars['title'] ?? '';
+    $message   = $vars['message'] ?? '';
+    $actionUrl = $vars['actionUrl'] ?? '';
 
-    extract($vars, EXTR_SKIP);
-
-    $defaultMsg = $vars['message'] ?? '';
+    $defaultMsg = $message;
 
     $content = match ($type) {
         'otp' => "
@@ -530,7 +536,7 @@ function emailTemplate(string $type, array $vars): string
             <div style='text-align:center;margin:32px 0;'>
                 <div style='display:inline-block;background:linear-gradient(135deg,{$color},#1e293b);padding:24px 48px;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,0.1);'>
                     <p style='color:#fff;font-size:12px;margin:0 0 8px;letter-spacing:2px;text-transform:uppercase;opacity:0.9;'>Verification Code</p>
-                    <span style='color:#fff;font-size:48px;font-weight:900;letter-spacing:10px;font-family:monospace;display:block;'>{$vars['otp']}</span>
+                    <span style='color:#fff;font-size:48px;font-weight:900;letter-spacing:10px;font-family:monospace;display:block;'>{$otp}</span>
                     <p style='color:#fff;font-size:12px;margin:10px 0 0;opacity:0.8;'>Expires in 15 minutes</p>
                 </div>
             </div>
