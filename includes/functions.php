@@ -511,10 +511,10 @@ function sendPasswordResetEmail(string $email, string $name, string $token): voi
  */
 function emailTemplate(string $type, array $vars): string
 {
-    $appName  = APP_NAME;
-    $appUrl   = APP_URL;
+    $appName  = setting('site_name', defined('APP_NAME') ? APP_NAME : 'OURCR ONLINE');
+    $appUrl   = rtrim(setting('site_url', defined('APP_URL') ? APP_URL : 'http://localhost/ourcr'), '/');
     $year     = date('Y');
-    $color    = DEFAULT_SITE_COLOR;
+    $color    = setting('site_color', defined('DEFAULT_SITE_COLOR') ? DEFAULT_SITE_COLOR : '#DC2626');
     $name     = '';
     $link     = '';
 
@@ -524,14 +524,14 @@ function emailTemplate(string $type, array $vars): string
 
     $content = match ($type) {
         'otp' => "
-            <h2 style='color:{$color};margin:0 0 8px;'>Your Verification Code</h2>
+            <h2 style='color:{$color};margin:0 0 8px;font-size:22px;'>Your Verification Code</h2>
             <p>Hi <strong>{$name}</strong>,</p>
             <p>Welcome to <strong>{$appName}</strong>! Use the code below to verify your email and activate your account.</p>
             <div style='text-align:center;margin:32px 0;'>
-                <div style='display:inline-block;background:linear-gradient(135deg,{$color},#6366f1);padding:24px 48px;border-radius:16px;'>
-                    <p style='color:#fff;font-size:13px;margin:0 0 8px;letter-spacing:2px;text-transform:uppercase;opacity:0.85;'>Verification Code</p>
-                    <span style='color:#fff;font-size:52px;font-weight:900;letter-spacing:12px;font-family:monospace;'>{$vars['otp']}</span>
-                    <p style='color:#fff;font-size:12px;margin:10px 0 0;opacity:0.75;'>Expires in 15 minutes</p>
+                <div style='display:inline-block;background:linear-gradient(135deg,{$color},#1e293b);padding:24px 48px;border-radius:16px;box-shadow:0 4px 12px rgba(0,0,0,0.1);'>
+                    <p style='color:#fff;font-size:12px;margin:0 0 8px;letter-spacing:2px;text-transform:uppercase;opacity:0.9;'>Verification Code</p>
+                    <span style='color:#fff;font-size:48px;font-weight:900;letter-spacing:10px;font-family:monospace;display:block;'>{$vars['otp']}</span>
+                    <p style='color:#fff;font-size:12px;margin:10px 0 0;opacity:0.8;'>Expires in 15 minutes</p>
                 </div>
             </div>
             <p style='text-align:center;color:#6b7280;font-size:14px;'>Enter this code on the verification page to complete your registration.</p>
@@ -539,56 +539,92 @@ function emailTemplate(string $type, array $vars): string
         ",
         'notification' => "
             <p>Hi <strong>{$name}</strong>,</p>
-            <div style='border-left:4px solid {$color};padding:12px 16px;background:#f9fafb;border-radius:0 8px 8px 0;margin:16px 0;'>
-                <p style='margin:0 0 4px;font-weight:600;color:#111;'>{$vars['title']}</p>
-                <p style='margin:0;color:#374151;'>{$vars['message']}</p>
+            <div style='border-left:4px solid {$color};padding:14px 18px;background:#f8fafc;border-radius:0 8px 8px 0;margin:20px 0;'>
+                <p style='margin:0 0 6px;font-weight:700;color:#0f172a;font-size:16px;'>{$vars['title']}</p>
+                <p style='margin:0;color:#334155;font-size:14px;line-height:1.5;'>{$vars['message']}</p>
             </div>
-            " . (!empty($vars['actionUrl']) ? "<p style='text-align:center;margin:24px 0;'><a href='{$vars['actionUrl']}' style='background:{$color};color:#fff;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:600;'>View Details</a></p>" : '') . "
-            <p style='color:#9ca3af;font-size:12px;margin-top:24px;'>You are receiving this because you have email notifications enabled on your account. <a href='{$appUrl}/settings' style='color:{$color};'>Manage preferences</a></p>
+            " . (!empty($vars['actionUrl']) ? "<table border='0' cellpadding='0' cellspacing='0' style='margin:24px auto;text-align:center;'><tr><td align='center' style='border-radius:8px;background-color:{$color};'><a href='{$vars['actionUrl']}' target='_blank' style='display:inline-block;padding:12px 28px;font-family:Arial,sans-serif;font-size:14px;color:#ffffff !important;font-weight:bold;text-decoration:none;border-radius:8px;'>View Details</a></td></tr></table>" : '') . "
+            <p style='color:#9ca3af;font-size:12px;margin-top:24px;'>You are receiving this notification because it is enabled on your account. <a href='{$appUrl}/settings' style='color:{$color};text-decoration:underline;'>Manage preferences</a></p>
         ",
         'verification' => "
-            <h2 style='color:{$color};'>Verify Your Email Address</h2>
-            <p>Hi {$name},</p>
-            <p>Thank you for registering with <strong>{$appName}</strong>. Please click the button below to verify your email address.</p>
-            <p style='text-align:center;margin:30px 0;'>
-                <a href='{$link}' style='background:{$color};color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;'>Verify Email Address</a>
-            </p>
-            <p>Or copy this link: <a href='{$link}'>{$link}</a></p>
-            <p>This link expires in 1 hour.</p>
-            <p style='color:#666;font-size:13px;'>If you didn't create an account, please ignore this email.</p>
+            <h2 style='color:{$color};margin:0 0 12px;font-size:22px;'>Verify Your Email Address</h2>
+            <p>Hi <strong>{$name}</strong>,</p>
+            <p>Thank you for registering with <strong>{$appName}</strong>. Please click the button below to verify your email address and activate your account.</p>
+            
+            <table border='0' cellpadding='0' cellspacing='0' style='margin:28px auto;text-align:center;'>
+                <tr>
+                    <td align='center' style='border-radius:8px;background-color:{$color};'>
+                        <a href='{$link}' target='_blank' style='display:inline-block;padding:14px 32px;font-family:Arial,sans-serif;font-size:15px;color:#ffffff !important;font-weight:bold;text-decoration:none;border-radius:8px;border:1px solid {$color};'>
+                            Verify Email Address
+                        </a>
+                    </td>
+                </tr>
+            </table>
+
+            <div style='background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:24px 0;text-align:left;word-break:break-all;'>
+                <p style='margin:0 0 6px 0;font-size:12px;color:#64748b;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;'>Or copy and paste this link in your browser:</p>
+                <a href='{$link}' target='_blank' style='color:{$color};font-size:13px;text-decoration:underline;word-break:break-all;line-height:1.5;font-family:monospace;display:inline-block;'>{$link}</a>
+            </div>
+
+            <p style='color:#64748b;font-size:13px;'>This verification link expires in 1 hour.</p>
+            <p style='color:#9ca3af;font-size:12px;margin-top:20px;'>If you didn't create an account, you can safely ignore this email.</p>
         ",
         'password_reset' => "
-            <h2 style='color:{$color};'>Reset Your Password</h2>
-            <p>Hi {$name},</p>
-            <p>We received a request to reset your password. Click the button below to set a new password.</p>
-            <p style='text-align:center;margin:30px 0;'>
-                <a href='{$link}' style='background:{$color};color:#fff;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;'>Reset Password</a>
-            </p>
-            <p>Or copy this link: <a href='{$link}'>{$link}</a></p>
-            <p>This link expires in 1 hour.</p>
-            <p style='color:#666;font-size:13px;'>If you didn't request a password reset, please ignore this email and ensure your account is secure.</p>
+            <h2 style='color:{$color};margin:0 0 12px;font-size:22px;'>Reset Your Password</h2>
+            <p>Hi <strong>{$name}</strong>,</p>
+            <p>We received a request to reset your password for your <strong>{$appName}</strong> account. Click the button below to choose a new password.</p>
+            
+            <table border='0' cellpadding='0' cellspacing='0' style='margin:28px auto;text-align:center;'>
+                <tr>
+                    <td align='center' style='border-radius:8px;background-color:{$color};'>
+                        <a href='{$link}' target='_blank' style='display:inline-block;padding:14px 36px;font-family:Arial,sans-serif;font-size:15px;color:#ffffff !important;font-weight:bold;text-decoration:none;border-radius:8px;border:1px solid {$color};'>
+                            Reset Password
+                        </a>
+                    </td>
+                </tr>
+            </table>
+
+            <div style='background-color:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin:24px 0;text-align:left;word-break:break-all;'>
+                <p style='margin:0 0 6px 0;font-size:12px;color:#64748b;font-weight:bold;text-transform:uppercase;letter-spacing:0.5px;'>Or copy and paste this link in your browser:</p>
+                <a href='{$link}' target='_blank' style='color:{$color};font-size:13px;text-decoration:underline;word-break:break-all;line-height:1.5;font-family:monospace;display:inline-block;'>{$link}</a>
+            </div>
+
+            <p style='color:#64748b;font-size:13px;'>This password reset link will expire in <strong>1 hour</strong>.</p>
+            <p style='color:#9ca3af;font-size:12px;margin-top:20px;'>If you did not request a password reset, please ignore this email or contact support if you suspect unauthorized access.</p>
         ",
         default => '<p>' . htmlspecialchars($defaultMsg) . '</p>',
     };
 
     return "<!DOCTYPE html>
 <html>
-<head><meta charset='UTF-8'><meta name='viewport' content='width=device-width,initial-scale=1'></head>
-<body style='margin:0;padding:0;background:#f3f4f6;font-family:Arial,sans-serif;'>
-<table width='100%' cellpadding='0' cellspacing='0' style='background:#f3f4f6;'>
-<tr><td align='center' style='padding:40px 20px;'>
-<table width='600' cellpadding='0' cellspacing='0' style='max-width:600px;width:100%;background:#fff;border-radius:12px;overflow:hidden;'>
-<tr><td style='background:{$color};padding:24px 32px;text-align:center;'>
-    <h1 style='color:#fff;margin:0;font-size:24px;'>{$appName}</h1>
-</td></tr>
-<tr><td style='padding:32px;color:#374151;font-size:15px;line-height:1.6;'>
-    {$content}
-</td></tr>
-<tr><td style='background:#f9fafb;padding:16px 32px;text-align:center;font-size:12px;color:#9ca3af;border-top:1px solid #e5e7eb;'>
-    &copy; {$year} {$appName}. All rights reserved. &bull; <a href='{$appUrl}' style='color:{$color};'>Visit Website</a>
-</td></tr>
-</table>
-</td></tr>
+<head>
+    <meta charset='UTF-8'>
+    <meta name='viewport' content='width=device-width,initial-scale=1'>
+    <title>{$appName}</title>
+</head>
+<body style='margin:0;padding:0;background:#f1f5f9;font-family:Arial,Helvetica,sans-serif;-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%;'>
+<table width='100%' cellpadding='0' cellspacing='0' border='0' style='background:#f1f5f9;width:100%;min-height:100vh;'>
+<tr>
+    <td align='center' style='padding:36px 16px;'>
+        <table width='100%' cellpadding='0' cellspacing='0' border='0' style='max-width:580px;width:100%;background:#ffffff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.06);border:1px solid #e2e8f0;'>
+        <tr>
+            <td style='background:{$color};padding:24px 32px;text-align:center;'>
+                <h1 style='color:#ffffff;margin:0;font-size:24px;font-weight:800;letter-spacing:0.5px;'>{$appName}</h1>
+            </td>
+        </tr>
+        <tr>
+            <td style='padding:32px 28px;color:#334155;font-size:15px;line-height:1.6;'>
+                {$content}
+            </td>
+        </tr>
+        <tr>
+            <td style='background:#f8fafc;padding:18px 28px;text-align:center;font-size:12px;color:#94a3b8;border-top:1px solid #e2e8f0;'>
+                &copy; {$year} {$appName}. All rights reserved. &bull; <a href='{$appUrl}' target='_blank' style='color:{$color};text-decoration:none;font-weight:600;'>Visit Website</a>
+            </td>
+        </tr>
+        </table>
+    </td>
+</tr>
 </table>
 </body>
 </html>";

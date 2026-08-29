@@ -6,15 +6,9 @@
 defined('OURCR_ONLINE') or die('Direct access not permitted.');
 
 $pageTitle = 'Reset Password';
-$token     = sanitize(get('token', ''));
+$token     = sanitize(get('token', post('token', '')));
 $error     = '';
 $success   = '';
-
-// Validate token presence
-if (empty($token)) {
-    setFlash('error', 'Invalid reset link. Please request a new one.');
-    redirectTo('forgot-password');
-}
 
 // Fetch existing session flash messages for inline rendering
 $flashMessages = getFlash();
@@ -33,7 +27,9 @@ if (isPost()) {
         $password = post('password', '');
         $confirm  = post('password_confirm', '');
 
-        if ($password !== $confirm) {
+        if (empty($token)) {
+            $error = 'Reset token is required. Please check your email link or enter the token.';
+        } elseif ($password !== $confirm) {
             $error = 'Passwords do not match.';
         } else {
             $result  = resetPassword($token, $password);
@@ -99,7 +95,18 @@ $siteColor = setting('site_color', DEFAULT_SITE_COLOR);
         <?php else: ?>
         <form method="POST" action="<?= APP_URL ?>/reset-password" id="resetForm">
             <?= csrfField() ?>
-            <input type="hidden" name="token" value="<?= e($token) ?>">
+            <?php if (!empty($token)): ?>
+                <input type="hidden" name="token" value="<?= e($token) ?>">
+            <?php else: ?>
+                <div class="mb-3">
+                    <label for="token" class="form-label">Reset Token / Code</label>
+                    <div class="input-group auth-input-group">
+                        <span class="input-group-text"><i class="fas fa-key"></i></span>
+                        <input type="text" class="form-control auth-input" id="token" name="token"
+                               placeholder="Paste your reset token from email" required>
+                    </div>
+                </div>
+            <?php endif; ?>
 
             <div class="mb-3">
                 <label for="password" class="form-label">New Password</label>
