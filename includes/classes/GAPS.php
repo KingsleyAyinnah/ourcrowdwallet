@@ -421,6 +421,51 @@ class GAPS
                 }
             }
 
+            // Check if account name was returned directly in the method's Result tag
+            // (e.g. <GetAccountInOtherBank_EncResult>KINGSLEY OGAR AYINNAH</GetAccountInOtherBank_EncResult>)
+            $resultVal = trim((string)($parsed['getaccountinotherbank_encresult'] ?? $parsed['getaccountingtb_encresult'] ?? ''));
+            if (empty($resultVal)) {
+                foreach ($parsed as $k => $v) {
+                    if (str_ends_with($k, 'result') && !empty($v)) {
+                        $resultVal = trim($v);
+                        break;
+                    }
+                }
+            }
+
+            $msg = trim((string)($parsed['message'] ?? $parsed['description'] ?? ''));
+
+            if (!empty($resultVal)) {
+                if (preg_match('/^(\d{3,4})\s*[:\-]\s*(.+)$/', $resultVal, $m)) {
+                    $code = $m[1];
+                    $msg = trim($m[2]);
+                } elseif (ctype_digit($resultVal)) {
+                    $code = $resultVal;
+                } else {
+                    $lower = strtolower($resultVal);
+                    $isError = false;
+                    $errorKeywords = ['invalid', 'error', 'not found', 'unable', 'failed', 'inactive', 'unauthorized', 'rejected', 'does not exist', 'exception'];
+                    foreach ($errorKeywords as $kw) {
+                        if (str_contains($lower, $kw)) {
+                            $isError = true;
+                            break;
+                        }
+                    }
+
+                    if (!$isError && strlen($resultVal) >= 3) {
+                        return [
+                            'success'      => true,
+                            'account_name' => strtoupper($resultVal),
+                            'currency'     => $parsed['currencycode'] ?? 'NGN',
+                            'code'         => '1000'
+                        ];
+                    }
+                    if (empty($msg)) {
+                        $msg = $resultVal;
+                    }
+                }
+            }
+
             $knownErrors = [
                 '1001' => 'Invalid NUBAN account number. Account number must be a valid 10-digit number.',
                 '1002' => 'Invalid bank code. Recipient bank is unsupported or invalid.',
@@ -430,7 +475,6 @@ class GAPS
                 '1008' => 'Automated name lookup is temporarily unavailable. Please type the account name manually.'
             ];
 
-            $msg = trim((string)($parsed['message'] ?? $parsed['description'] ?? ''));
             $msg = ltrim($msg, ' :');
 
             if (isset($knownErrors[$code])) {
