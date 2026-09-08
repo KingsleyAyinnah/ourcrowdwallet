@@ -52,8 +52,8 @@ Options -MultiViews
 
     # Admin routes
     RewriteRule ^admin/?$ admin/index.php [L,QSA]
-    RewriteRule ^admin/([a-zA-Z0-9_-]+)/?$ admin/index.php?page=$1 [L,QSA]
-    RewriteRule ^admin/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_-]+)/?$ admin/index.php?page=$1&action=$2 [L,QSA]
+    RewriteRule ^admin/([a-zA-Z0-9_-]+)/?$ admin/index.php?admin_route=$1 [L,QSA]
+    RewriteRule ^admin/([a-zA-Z0-9_-]+)/([a-zA-Z0-9_-]+)/?$ admin/index.php?admin_route=$1&action=$2 [L,QSA]
 
     # API routes
     RewriteRule ^api/([a-zA-Z0-9_/-]+)/?$ api/index.php?endpoint=$1 [L,QSA]

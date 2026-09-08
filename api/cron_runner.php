@@ -149,6 +149,14 @@ function runDepositReconciliation(): bool
     Database::execute("UPDATE cron_jobs SET last_run_at = NOW(), status = 'running' WHERE name = 'deposit_reconciliation'");
 
     try {
+        // 1. Automatically cancel pending deposit intents older than 1 hour (or past expires_at)
+        Database::execute(
+            "UPDATE deposit_intents 
+             SET status = 'cancelled', updated_at = NOW() 
+             WHERE status = 'pending' 
+               AND (expires_at <= NOW() OR created_at < NOW() - INTERVAL 1 HOUR)"
+        );
+
         // Fetch all unmatched credit transactions
         $unmatched = Database::fetchAll("SELECT * FROM gaps_transactions WHERE transaction_type = 'credit' AND matched = 0");
         $matches = 0;
@@ -158,14 +166,17 @@ function runDepositReconciliation(): bool
             $sender    = trim(strtolower($credit['sender_name']));
             $narration = trim($credit['narration']);
             
-            // Search for all pending intents matching the exact amount
+            // Search for pending intents matching the exact amount:
+            // Bank transaction MUST have occurred between (created_at - 15 minutes) and (created_at + 1 hour).
+            // Old historical bank credits or transfers arriving after 1 hour are strictly blocked.
             $pendingIntents = Database::fetchAll(
                 "SELECT * FROM deposit_intents 
                  WHERE status = 'pending' 
                    AND amount = ? 
                    AND expires_at > NOW() 
+                   AND ? BETWEEN DATE_SUB(created_at, INTERVAL 15 MINUTE) AND DATE_ADD(created_at, INTERVAL 1 HOUR)
                  ORDER BY created_at ASC",
-                [$amount]
+                [$amount, $credit['transaction_date']]
             );
 
             $matchedIntent = null;
@@ -300,9 +311,12 @@ function isSenderNameMatched(string $declaredName, string $narration, string $ex
         return true;
     }
 
-    // Tokenized word overlap check
+    // Tokenized word overlap check (ignoring generic banking stop words)
+    $stopWords = ['bank', 'transfer', 'trf', 'nip', 'gtb', 'gtbank', 'from', 'to', 'credit', 'cr', 'dr', 'pos', 'ussd', 'fbn', 'uba', 'zenith', 'access', 'account', 'ourcr', 'online', 'wallet', 'funds', 'payment', 'pay'];
     $rawWords = preg_split('/[^a-z0-9]+/i', $declaredLower);
-    $declaredWords = array_values(array_filter($rawWords, function($w) { return strlen($w) >= 2; }));
+    $declaredWords = array_values(array_filter($rawWords, function($w) use ($stopWords) { 
+        return strlen($w) >= 3 && !in_array($w, $stopWords, true); 
+    }));
 
     if (empty($declaredWords)) {
         return false;

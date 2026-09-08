@@ -555,23 +555,42 @@ function verifyEmail(string $token): array
  */
 function initiatePasswordReset(string $email): array
 {
-    $ip    = getClientIP();
-    $limit = rateLimit($ip, 'password_reset', 3, 3600);
-    if (!$limit['allowed']) {
-        return ['success' => false, 'message' => 'Too many reset attempts. Please try again in 1 hour.'];
+    $cleanEmail = sanitizeEmail($email);
+    if (empty($cleanEmail) || !isValidEmail($cleanEmail)) {
+        return ['success' => false, 'message' => 'Please enter a valid email address.'];
     }
 
+    $ip = getClientIP();
+
+    // Check if the user account exists
     $user = Database::fetchOne(
-        'SELECT id, email, first_name FROM users WHERE email = ? AND deleted_at IS NULL LIMIT 1',
-        [sanitizeEmail($email)]
+        'SELECT id, email, first_name, status FROM users WHERE email = ? AND deleted_at IS NULL LIMIT 1',
+        [$cleanEmail]
     );
 
-    // Always return success to prevent email enumeration
     if (!$user) {
-        return ['success' => true, 'message' => 'If that email is registered, you will receive a reset link shortly.'];
+        return [
+            'success' => false,
+            'message' => 'No account found with that email address. Please check the email or register a new account.'
+        ];
     }
 
-    // Invalidate old tokens
+    if (in_array($user['status'], ['suspended', 'banned'], true)) {
+        return [
+            'success' => false,
+            'message' => 'This account has been ' . $user['status'] . '. Please contact support.'
+        ];
+    }
+
+    // Rate limit: 5 attempts per 1 hour (3600 seconds) per email
+    $emailIdentifier = 'pwreset_email_' . md5(strtolower($cleanEmail));
+    $limit = rateLimit($emailIdentifier, 'password_reset', 5, 3600);
+    if (!$limit['allowed']) {
+        $wait = max(1, (int)ceil(($limit['retry_after'] ?? 3600) / 60));
+        return ['success' => false, 'message' => "Too many password reset requests for this email. Please try again in {$wait} minute(s)."];
+    }
+
+    // Invalidate old pending tokens
     Database::execute(
         'UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL',
         [$user['id']]
@@ -591,7 +610,10 @@ function initiatePasswordReset(string $email): array
 
     auditLog('password_reset_requested', 'Password reset requested', 'user', $user['id'], null, $ip);
 
-    return ['success' => true, 'message' => 'If that email is registered, you will receive a reset link shortly.'];
+    return [
+        'success' => true,
+        'message' => 'A password reset link has been sent to your email. Please check your inbox and spam folder.'
+    ];
 }
 
 /**

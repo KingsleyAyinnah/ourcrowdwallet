@@ -26,8 +26,8 @@ if (isPost()) {
         $isAjax     = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest';
         $amount     = (float) post('amount');
         $senderName = sanitizeString(post('sender_name'));
-        // expected_at: 30 minutes from now (user is about to transfer)
-        $expectedAt = date('Y-m-d H:i:s', time() + 1800);
+        // expected_at: 1 hour from now (user is about to transfer)
+        $expectedAt = date('Y-m-d H:i:s', time() + 3600);
 
         $result = \Ourcr\Wallet::createDepositIntent(
             userId:     $user['id'],
@@ -224,7 +224,7 @@ include INCLUDES_PATH . '/header.php';
                     </div>
 
                     <div class="alert alert-info py-2 px-3 small border-0 mb-4 rounded-12">
-                        <i class="fas fa-info-circle me-2"></i><strong>Note:</strong> Once you complete the transfer in your bank app, click <strong>I Have Sent This Payment</strong> below.
+                        <i class="fas fa-info-circle me-2"></i><strong>Note:</strong> This transfer declaration is valid for <strong>1 hour</strong>. Once you complete the transfer in your bank app, click <strong>I Have Sent This Payment</strong> below. If unpaid after 1 hour, it will automatically cancel.
                     </div>
 
                     <div id="paymentSentSection">

@@ -149,7 +149,7 @@ define('DATETIME_FORMAT',       'd M Y, h:i A');
 define('DB_DATE_FORMAT',        'Y-m-d H:i:s');
 
 // ─── Cron ────────────────────────────────────────────────────────────────────
-define('CRON_SECRET',           'CHANGE_THIS_CRON_SECRET_IN_PRODUCTION');
+define('CRON_SECRET',           $_ENV['CRON_SECRET'] ?? 'cr_sec_8f93e1b7c4a25d06e81f9a3c7b2d5e41');
 define('GAPS_POLL_INTERVAL',    60);            // seconds
 
 // ─── GTBank GAPS Gateway Defaults ────────────────────────────────────────────

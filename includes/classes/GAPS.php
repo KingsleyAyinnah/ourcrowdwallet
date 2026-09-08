@@ -20,50 +20,43 @@ class GAPS
 
     public static function getAccessCode(): string
     {
-        return (string) setting('gaps_access_code', setting('gaps_merchant_id', defined('GAPS_ACCESS_CODE') ? GAPS_ACCESS_CODE : '205140019'));
+        return trim((string) setting('gaps_access_code', setting('gaps_merchant_id', '')));
     }
 
     public static function getUsername(): string
     {
-        return (string) setting('gaps_username', defined('GAPS_USERNAME') ? GAPS_USERNAME : 'adewotol');
+        return trim((string) setting('gaps_username', ''));
     }
 
     public static function getPassword(): string
     {
-        return (string) setting('gaps_password', defined('GAPS_PASSWORD') ? GAPS_PASSWORD : 'Test123$');
+        return (string) setting('gaps_password', '');
     }
 
     public static function getAccountNumber(): string
     {
-        return (string) setting('gaps_account_number', defined('GAPS_ACCOUNT_NUMBER') ? GAPS_ACCOUNT_NUMBER : '0004527849');
+        return trim((string) setting('gaps_account_number', ''));
     }
 
     public static function getChannel(): string
     {
         $channel = trim((string) setting('gaps_channel', ''));
-        if ($channel !== '') {
-            return $channel;
-        }
-        return defined('GAPS_CHANNEL') ? GAPS_CHANNEL : 'GSTP';
+        return $channel !== '' ? $channel : 'CROWDAPP';
     }
 
     public static function resolveBaseUrl(): string
     {
-        $env = strtolower((string) setting('gaps_env', defined('GAPS_ENV') ? GAPS_ENV : 'sandbox'));
         $baseUrl = trim((string) setting('gaps_base_url', ''));
-
-        if ($env === 'live') {
-            if (!empty($baseUrl) && !str_contains($baseUrl, 'gtweb6')) {
-                return $baseUrl;
-            }
-            return defined('GAPS_BASE_URL_LIVE') ? GAPS_BASE_URL_LIVE : 'https://gtweb.gtbank.com/GSTPS/GAPS_FileUploader/FileUploader.asmx';
-        }
-
-        if (!empty($baseUrl) && str_contains($baseUrl, 'gtweb6')) {
+        if ($baseUrl !== '') {
             return $baseUrl;
         }
 
-        return defined('GAPS_BASE_URL_SANDBOX') ? GAPS_BASE_URL_SANDBOX : 'https://gtweb6.gtbank.com/GSTPS/GAPS_FileUploader/FileUploader.asmx';
+        $env = strtolower(trim((string) setting('gaps_env', 'sandbox')));
+        if ($env === 'live') {
+            return 'https://gtweb.gtbank.com/GSTPS/GAPS_FileUploader/FileUploader.asmx';
+        }
+
+        return 'https://gtweb6.gtbank.com/GSTPS/GAPS_FileUploader/FileUploader.asmx';
     }
 
     // ─── Cryptographic Helpers (GTBank RSA Public Key Encryption) ────────────
@@ -101,25 +94,17 @@ class GAPS
      */
     private static function getPublicKey(): \OpenSSLAsymmetricKey
     {
-        $raw = setting('gaps_public_key');
+        $raw = trim((string) setting('gaps_public_key', ''));
         if (empty($raw)) {
-            $raw = defined('GAPS_PUBLIC_KEY') ? GAPS_PUBLIC_KEY : '';
+            throw new \RuntimeException('GAPS: GTBank RSA Public Key is not configured in Admin > API Config.');
         }
 
-        $raw = html_entity_decode((string)$raw, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        $raw = html_entity_decode($raw, ENT_QUOTES | ENT_HTML5, 'UTF-8');
         $pem = self::normalizePem($raw);
         $key = openssl_pkey_get_public($pem);
 
         if ($key === false) {
-            // Automatic Fallback: If DB setting key is invalid, try default system key
-            if (defined('GAPS_PUBLIC_KEY') && !empty(GAPS_PUBLIC_KEY)) {
-                $pemFallback = self::normalizePem(GAPS_PUBLIC_KEY);
-                $keyFallback = openssl_pkey_get_public($pemFallback);
-                if ($keyFallback !== false) {
-                    return $keyFallback;
-                }
-            }
-            throw new \RuntimeException('GAPS: Failed to load GTBank RSA Public Key: ' . openssl_error_string());
+            throw new \RuntimeException('GAPS: Failed to load GTBank RSA Public Key from Admin API Config: ' . openssl_error_string());
         }
 
         return $key;
@@ -177,48 +162,6 @@ class GAPS
         $response = self::sendXmlRequest($xmlPayload, 'AccountStatement_XML_Enc');
 
         if (!$response['success']) {
-            $isSandbox = (strtolower((string)setting('gaps_env', 'sandbox')) === 'sandbox');
-
-            if ($isSandbox) {
-                // In Sandbox / Test mode, when GTBank endpoint returns HTTP 500 (unwhitelisted IP),
-                // generate mock statement credits for any pending deposit intents so testing works end-to-end!
-                $mockTxns = [];
-                try {
-                    $pending = \Database::fetchAll("SELECT * FROM deposit_intents WHERE status = 'pending' AND expires_at > NOW()");
-                    foreach ($pending as $p) {
-                        $ref = 'GAPS_TEST_' . $p['id'] . '_' . rand(1000, 9999);
-                        $mockTxns[] = [
-                            'reference'        => $ref,
-                            'type'             => TXN_CREDIT,
-                            'amount'           => (float)$p['amount'],
-                            'sender_name'      => $p['sender_name'],
-                            'narration'        => "Transfer via GAPS from " . $p['sender_name'],
-                            'transaction_date' => date('Y-m-d H:i:s'),
-                            'balance_after'    => 500000.0,
-                            'raw'              => [
-                                'val_date'  => date('Y-m-d'),
-                                'debit'     => 0,
-                                'credit'    => (float)$p['amount'],
-                                'balance'   => 500000.0,
-                                'remarks'   => "Transfer via GAPS from " . $p['sender_name'],
-                                'reference' => $ref,
-                            ]
-                        ];
-                    }
-                } catch (\Throwable $ex) {
-                    // Ignore DB errors
-                }
-
-                return [
-                    'success'      => true,
-                    'message'      => 'GAPS Sandbox Mode: Statement fetched (Simulated for testing)',
-                    'code'         => '00',
-                    'transactions' => $mockTxns,
-                    'total'        => count($mockTxns),
-                    'page'         => $page,
-                ];
-            }
-
             $response['transactions'] = [];
             $response['total']        = 0;
             $response['page']         = $page;
@@ -416,18 +359,20 @@ class GAPS
         // Check if bank is GTB
         $isGTB = ($bankCode === '058');
 
-        // Sandbox Mock Mode fallback
-        if (strtolower((string)setting('gaps_env', 'sandbox')) === 'sandbox') {
+        $username   = self::getUsername();
+        $password   = self::getPassword();
+        $accessCode = self::getAccessCode();
+
+        if (empty($username) || empty($password) || empty($accessCode)) {
             return [
-                'success' => true,
-                'account_name' => 'KINGSLEY AYINNAH (SANDBOX TEST)',
-                'code' => '1000'
+                'success' => false,
+                'message' => 'GTBank GAPS credentials are not configured in Admin > API Config.'
             ];
         }
 
-        $encUser   = self::encryptField(self::getUsername());
-        $encPass   = self::encryptField(self::getPassword());
-        $encAccess = self::encryptField(self::getAccessCode());
+        $encUser   = self::encryptField($username);
+        $encPass   = self::encryptField($password);
+        $encAccess = self::encryptField($accessCode);
         $encAccNo  = self::encryptField($accountNumber);
         $channel   = self::getChannel();
 
@@ -462,26 +407,38 @@ class GAPS
 
         try {
             $parsed = self::parseResponseXml($response['raw']);
-            $code = (string)($parsed['rescode'] ?? $parsed['code'] ?? '');
+            $code = (string)($parsed['code'] ?? $parsed['rescode'] ?? '');
             
             if ($code === '1000') {
                 $accountName = trim((string)($parsed['accountname'] ?? $parsed['account_name'] ?? ''));
                 if (!empty($accountName)) {
                     return [
-                        'success' => true,
-                        'account_name' => $accountName,
-                        'code' => $code
+                        'success'      => true,
+                        'account_name' => strtoupper($accountName),
+                        'currency'     => $parsed['currencycode'] ?? 'NGN',
+                        'code'         => $code
                     ];
                 }
             }
 
-            $msg = trim((string)($parsed['message'] ?? $parsed['description'] ?? 'Account validation failed'));
-            $msg = ltrim($msg, ' :'); // Strip leading spaces/colons
+            $knownErrors = [
+                '1001' => 'Invalid NUBAN account number. Account number must be a valid 10-digit number.',
+                '1002' => 'Invalid bank code. Recipient bank is unsupported or invalid.',
+                '1003' => 'Account not found or inactive at the recipient bank.',
+                '1004' => 'Authentication failed with GTBank GAPS. Please verify credentials in Admin.',
+                '1005' => 'GAPS channel unauthorized for this inquiry.',
+                '1008' => 'Automated name lookup is temporarily unavailable. Please type the account name manually.'
+            ];
 
-            if ($code === '1008' || stripos($msg, 'System error') !== false) {
+            $msg = trim((string)($parsed['message'] ?? $parsed['description'] ?? ''));
+            $msg = ltrim($msg, ' :');
+
+            if (isset($knownErrors[$code])) {
+                $userMsg = $knownErrors[$code];
+            } elseif ($code === '1008' || stripos($msg, 'System error') !== false) {
                 $userMsg = 'Automated name lookup is temporarily unavailable. Please type the account name manually.';
             } else {
-                $userMsg = $msg . ($code ? ' (Code ' . $code . ')' : '');
+                $userMsg = (!empty($msg) ? $msg : 'Account validation failed') . ($code ? " (Code {$code})" : '');
             }
 
             writeLog(LOG_CHAN_GAPS, 'error', 'GAPS account resolve returned non-success response.', [
@@ -688,15 +645,16 @@ class GAPS
         return $transactions;
     }
 
-    /**
-     * Parse general GAPS XML response tags into key-value array.
-     */
     private static function parseResponseXml(string $rawXml): array
     {
-        $decoded = html_entity_decode($rawXml, ENT_QUOTES | ENT_XML1, 'UTF-8');
-        $parsed = [];
+        $decoded = $rawXml;
+        $maxDecode = 3;
+        while ($maxDecode-- > 0 && (str_contains($decoded, '&lt;') || str_contains($decoded, '&amp;'))) {
+            $decoded = html_entity_decode($decoded, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        }
 
-        preg_match_all('/<([a-zA-Z0-9_]+)>([^<]+)<\/\1>/', $decoded, $matches, PREG_SET_ORDER);
+        $parsed = [];
+        preg_match_all('/<([a-zA-Z0-9_]+)>([^<]*)<\/\1>/', $decoded, $matches, PREG_SET_ORDER);
         foreach ($matches as $m) {
             $key = strtolower(trim($m[1]));
             $val = trim($m[2]);

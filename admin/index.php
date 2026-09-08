@@ -44,9 +44,32 @@ $adminRoutes = [
     'logout'        => 'logout',
 ];
 
-$page   = isset($_GET['page']) ? strtolower(preg_replace('/[^a-z0-9_-]/', '', $_GET['page'])) : '';
-$action = isset($_GET['action']) ? strtolower(preg_replace('/[^a-z0-9_-]/', '', $_GET['action'])) : '';
+// Resolve admin route safely (prevent pagination ?page=2 from overwriting the route)
+$routeKey = '';
+$action   = isset($_GET['action']) ? strtolower(preg_replace('/[^a-z0-9_-]/', '', (string)$_GET['action'])) : '';
 
+if (!empty($_GET['admin_route'])) {
+    $routeKey = strtolower(preg_replace('/[^a-z0-9_-]/', '', (string)$_GET['admin_route']));
+}
+
+if ($routeKey === '' && !empty($_SERVER['REQUEST_URI'])) {
+    $reqPath  = trim(parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/');
+    $segments = explode('/', $reqPath);
+    $adminPos = array_search('admin', $segments, true);
+    if ($adminPos !== false && isset($segments[$adminPos + 1]) && $segments[$adminPos + 1] !== '') {
+        $routeKey = strtolower(preg_replace('/[^a-z0-9_-]/', '', $segments[$adminPos + 1]));
+        if (empty($action) && isset($segments[$adminPos + 2]) && $segments[$adminPos + 2] !== '') {
+            $action = strtolower(preg_replace('/[^a-z0-9_-]/', '', $segments[$adminPos + 2]));
+        }
+    }
+}
+
+// Fallback to $_GET['page'] ONLY if it is a non-numeric route string (e.g. ?page=users)
+if ($routeKey === '' && isset($_GET['page']) && !is_numeric($_GET['page'])) {
+    $routeKey = strtolower(preg_replace('/[^a-z0-9_-]/', '', (string)$_GET['page']));
+}
+
+$page     = $routeKey;
 $slug     = $adminRoutes[$page] ?? '404';
 $pageFile = ADMIN_PATH . '/pages/' . $slug . '.php';
 

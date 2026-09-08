@@ -98,9 +98,12 @@ $siteColor = setting('site_color', DEFAULT_SITE_COLOR);
         </form>
         <?php endif; ?>
 
-        <div class="text-center mt-4">
+        <div class="d-flex justify-content-between align-items-center mt-4">
             <a href="<?= APP_URL ?>/login" class="auth-link">
                 <i class="fas fa-arrow-left me-1"></i> Back to Login
+            </a>
+            <a href="<?= APP_URL ?>/register" class="auth-link text-decoration-none fw-bold" style="color: var(--site-color);">
+                Register <i class="fas fa-arrow-right ms-1"></i>
             </a>
         </div>
     </div>
