@@ -467,22 +467,22 @@ class GAPS
             }
 
             $knownErrors = [
-                '1001' => 'Invalid NUBAN account number. Account number must be a valid 10-digit number.',
+                '1001' => 'Invalid account number. Account number must be a valid 10-digit number.',
                 '1002' => 'Invalid bank code. Recipient bank is unsupported or invalid.',
                 '1003' => 'Account not found or inactive at the recipient bank.',
                 '1004' => 'Authentication failed with GTBank GAPS. Please verify credentials in Admin.',
                 '1005' => 'GAPS channel unauthorized for this inquiry.',
-                '1008' => 'Automated name lookup is temporarily unavailable. Please type the account name manually.'
+                '1008' => 'Account name could not be resolved. Please verify the account number and bank, and try again.'
             ];
 
             $msg = ltrim($msg, ' :');
 
             if (isset($knownErrors[$code])) {
                 $userMsg = $knownErrors[$code];
-            } elseif ($code === '1008' || stripos($msg, 'System error') !== false) {
-                $userMsg = 'Automated name lookup is temporarily unavailable. Please type the account name manually.';
+            } elseif ($code === '1008' || stripos($msg, 'System error') !== false || stripos($msg, 'retry') !== false) {
+                $userMsg = 'Account name could not be resolved. Please verify the account number and bank, and try again.';
             } else {
-                $userMsg = (!empty($msg) ? $msg : 'Account validation failed') . ($code ? " (Code {$code})" : '');
+                $userMsg = (!empty($msg) ? $msg : 'Account name could not be resolved. Please verify the account number and bank, and try again.');
             }
 
             writeLog(LOG_CHAN_GAPS, 'error', 'GAPS account resolve returned non-success response.', [
@@ -508,7 +508,7 @@ class GAPS
             ]);
             return [
                 'success' => false,
-                'message' => 'Failed to parse GAPS validation response: ' . $e->getMessage()
+                'message' => 'Account name could not be resolved. Please verify the account number and bank, and try again.'
             ];
         }
     }

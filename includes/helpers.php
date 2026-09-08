@@ -440,13 +440,13 @@ function getBankCodeByName(string $bankName): string
         'unity bank'                                => '215',
         'wema bank'                                 => '035',
         'zenith bank'                               => '057',
-        'kuda bank'                                 => '50211',
-        'kuda microfinance bank'                    => '50211',
-        'rubies mfb'                                => '125',
-        'vfd microfinance bank'                     => '566',
-        'carbon'                                    => '565',
-        'fairmoney mfb'                             => '51318',
-        'fairmoney microfinance bank'               => '51318'
+        'kuda bank'                                 => '090267',
+        'kuda microfinance bank'                    => '090267',
+        'rubies mfb'                                => '090175',
+        'vfd microfinance bank'                     => '090110',
+        'carbon'                                    => '100026',
+        'fairmoney mfb'                             => '090551',
+        'fairmoney microfinance bank'               => '090551'
     ];
 
     $key = trim(strtolower($bankName));

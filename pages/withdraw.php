@@ -62,23 +62,33 @@ if (isPost()) {
             setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'account_name' => post('account_name'), 'remark' => post('remark')]);
             setFlash('error', 'Withdrawal amount must be between ' . formatMoney($minWithdrawal) . ' and ' . formatMoney($maxWithdrawal) . '.');
             redirectTo('withdraw');
-        } elseif (empty($bankName) || empty($accountNo) || empty($accountName)) {
-            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'account_name' => post('account_name'), 'remark' => post('remark')]);
+        } elseif (empty($bankName) || empty($accountNo)) {
+            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'remark' => post('remark')]);
             setFlash('error', 'All bank details are required.');
             redirectTo('withdraw');
         } elseif (empty($txnPin)) {
-            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'account_name' => post('account_name'), 'remark' => post('remark')]);
+            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'remark' => post('remark')]);
             setFlash('error', 'Transaction PIN is required.');
             redirectTo('withdraw');
         } elseif (!Ourcr\Wallet::verifyPin($user['id'], $txnPin)) {
-            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'account_name' => post('account_name'), 'remark' => post('remark')]);
+            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'remark' => post('remark')]);
             setFlash('error', 'Invalid transaction security PIN. Please try again.');
             redirectTo('withdraw');
         } elseif ($balance < ($amount + $withdrawalFee)) {
-            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'account_name' => post('account_name'), 'remark' => post('remark')]);
+            setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'remark' => post('remark')]);
             setFlash('error', 'Insufficient balance. You need ' . formatMoney($amount + $withdrawalFee) . ' (including ' . formatMoney($withdrawalFee) . ' withdrawal fee).');
             redirectTo('withdraw');
         } else {
+            // Strictly verify recipient account with GTBank GAPS server-side
+            $resolveCheck = \Ourcr\AccountResolver::resolveAccountName($accountNo, $bankName);
+            if (empty($resolveCheck['success']) || empty($resolveCheck['account_name'])) {
+                setOldInputs(['amount' => post('amount'), 'bank_name' => post('bank_name'), 'account_number' => post('account_number'), 'remark' => post('remark')]);
+                $errMsg = $resolveCheck['message'] ?? 'Account name could not be resolved. Please verify the account number and bank, and try again.';
+                setFlash('error', $errMsg);
+                redirectTo('withdraw');
+            }
+            $accountName = $resolveCheck['account_name'];
+
             try {
                 $result = Ourcr\Wallet::requestWithdrawal(
                     $user['id'],
@@ -263,7 +273,10 @@ include INCLUDES_PATH . '/header.php';
                                    id="account_name" 
                                    name="account_name" 
                                    value="<?= e($oldAccountName) ?>"
-                                   placeholder="Will be fetched automatically, or type manually" 
+                                   placeholder="Will be resolved automatically from bank" 
+                                   readonly 
+                                   tabindex="-1"
+                                   style="background-color: #f8fafc; cursor: not-allowed; font-weight: 600;"
                                    required>
                             <div id="account-name-alert" style="display:none;" class="mt-2"></div>
                         </div>
@@ -346,10 +359,11 @@ $(document).ready(function() {
         $('#bankDropdownLabel').text(bankName);
         $btn.css({'border-color': '#6d28d9', 'color': '#111'});
 
-        // Fill account name and show success inline alert
-        $('#account_name').val(accName);
+        // Clear account name and re-verify live with GAPS
+        $('#account_name').val('');
         clearAccountAlert();
-        showAccountAlert('success', 'Beneficiary loaded: ' + accName + ' \u2014 ' + bankName);
+        $('#btnSubmitWithdrawal').prop('disabled', true);
+        fetchAccountName();
     });
 
     // ── Amount fee calculator ─────────────────────────────────────────────────
@@ -418,6 +432,9 @@ $(document).ready(function() {
         $btn.css({'border-color': '#6d28d9', 'color': '#111'});
         $panel.hide();
         $btn.find('i').removeClass('fa-chevron-up').addClass('fa-chevron-down');
+        $('#account_name').val('');
+        clearAccountAlert();
+        $('#btnSubmitWithdrawal').prop('disabled', true);
         fetchAccountName();
     });
 
@@ -426,56 +443,64 @@ $(document).ready(function() {
         var accountNo = $('#account_number').val().replace(/\D/g, '');
         var bankName  = $('#selected_bank_name').val();
 
-        if (accountNo.length === 10 && bankName) {
+        if (accountNo.length !== 10 || !bankName) {
+            $('#account_name').val('');
             clearAccountAlert();
-            $('#account_name').prop('disabled', true).val('Fetching account name...');
             $('#btnSubmitWithdrawal').prop('disabled', true);
-
-            $.ajax({
-                url: 'api/wallet.php?action=resolve_account',
-                type: 'POST',
-                data: {
-                    account_number: accountNo,
-                    bank_name: bankName,
-                    csrf_token: $('input[name="csrf_token"]').val()
-                },
-                dataType: 'json',
-                success: function(res) {
-                    if (res.success) {
-                        $('#account_name').val(res.account_name);
-                        showAccountAlert('success', 'Account verified: ' + res.account_name);
-                    } else {
-                        $('#account_name').val('');
-                        var msg = res.message || 'Could not verify account name.';
-                        if (!msg.toLowerCase().includes('manually')) {
-                            msg += ' — You can type the account name manually.';
-                        }
-                        showAccountAlert('error', msg);
-                    }
-                },
-                error: function(xhr) {
-                    $('#account_name').val('');
-                    var err = (xhr.responseJSON && xhr.responseJSON.message)
-                        ? xhr.responseJSON.message
-                        : 'Account name verification is temporarily unavailable.';
-                    if (!err.toLowerCase().includes('manually')) {
-                        err += ' — You can type the account name manually.';
-                    }
-                    showAccountAlert('error', err);
-                },
-                complete: function() {
-                    $('#account_name').prop('disabled', false).focus();
-                    $('#btnSubmitWithdrawal').prop('disabled', false);
-                }
-            });
+            return;
         }
+
+        clearAccountAlert();
+        $('#account_name').val('Resolving account name...');
+        $('#btnSubmitWithdrawal').prop('disabled', true);
+
+        $.ajax({
+            url: 'api/wallet.php?action=resolve_account',
+            type: 'POST',
+            data: {
+                account_number: accountNo,
+                bank_name: bankName,
+                csrf_token: $('input[name="csrf_token"]').val()
+            },
+            dataType: 'json',
+            success: function(res) {
+                if (res.success && res.account_name) {
+                    $('#account_name').val(res.account_name);
+                    showAccountAlert('success', 'Account verified: ' + res.account_name);
+                    $('#btnSubmitWithdrawal').prop('disabled', false);
+                } else {
+                    $('#account_name').val('');
+                    $('#btnSubmitWithdrawal').prop('disabled', true);
+                    var msg = res.message || 'Account name could not be resolved. Please verify the account number and bank, and try again.';
+                    showAccountAlert('error', msg);
+                }
+            },
+            error: function(xhr) {
+                $('#account_name').val('');
+                $('#btnSubmitWithdrawal').prop('disabled', true);
+                var err = (xhr.responseJSON && xhr.responseJSON.message)
+                    ? xhr.responseJSON.message
+                    : 'Account name could not be resolved. Please verify the account number and bank, and try again.';
+                showAccountAlert('error', err);
+            },
+            complete: function() {
+                var currentVal = $('#account_name').val().trim();
+                if (currentVal && currentVal !== 'Resolving account name...') {
+                    $('#btnSubmitWithdrawal').prop('disabled', false);
+                } else {
+                    $('#btnSubmitWithdrawal').prop('disabled', true);
+                }
+            }
+        });
     }
 
     // Trigger name fetch when account number hits 10 digits
     $('#account_number').on('input', function() {
         var val = $(this).val().replace(/\D/g, '');
         $(this).val(val);
+        $('#account_name').val('');
         clearAccountAlert();
+        $('#btnSubmitWithdrawal').prop('disabled', true);
         if (val.length === 10) {
             fetchAccountName();
         }
@@ -499,11 +524,27 @@ $(document).ready(function() {
             return false;
         }
 
+        var accName = $('#account_name').val().trim();
+        if (!accName || accName === 'Resolving account name...') {
+            e.preventDefault();
+            Swal.fire({
+                icon: 'error',
+                title: 'Account Verification Required',
+                text: 'Account name could not be resolved. Please verify the account number and bank, and try again.'
+            });
+            return false;
+        }
+
         isSubmitting = true;
         var $submitBtn = $('#btnSubmitWithdrawal');
         $submitBtn.prop('disabled', true).addClass('disabled opacity-50')
             .html('<i class="fas fa-spinner fa-spin me-2"></i> Processing Withdrawal...');
     });
+
+    // Initial check: if account name is empty, disable submit
+    if (!$('#account_name').val().trim()) {
+        $('#btnSubmitWithdrawal').prop('disabled', true);
+    }
 });
 </script>
 

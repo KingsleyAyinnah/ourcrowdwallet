@@ -633,7 +633,10 @@ include ADMIN_PATH . '/includes/header.php';
                                        class="form-control fw-bold text-dark" 
                                        id="ext_account_name" 
                                        name="ext_account_name" 
-                                       placeholder="Will be fetched automatically, or type manually" 
+                                       placeholder="Will be resolved automatically from bank" 
+                                       readonly 
+                                       tabindex="-1"
+                                       style="background-color: #f8fafc; cursor: not-allowed;"
                                        required>
                                 <div id="ext-account-name-alert" style="display:none;" class="mt-2"></div>
                             </div>
@@ -830,58 +833,70 @@ $(document).ready(function() {
         var accountNo = $('#ext_account_no').val().replace(/\D/g, '');
         var bankName  = $('#selected_ext_bank_name').val();
 
-        if (accountNo.length === 10 && bankName) {
+        if (accountNo.length !== 10 || !bankName) {
+            $('#ext_account_name').val('');
             $('#ext-account-name-alert').hide().html('');
-            $('#ext_account_name').prop('disabled', true).val('Fetching account name...');
             $('#btnSubmitExtTransfer').prop('disabled', true);
-
-            $.ajax({
-                url: '<?= APP_URL ?>/api/wallet.php?action=resolve_account',
-                type: 'POST',
-                data: {
-                    account_number: accountNo,
-                    bank_name: bankName,
-                    _csrf_token: '<?= csrfToken() ?>',
-                    csrf_token: '<?= csrfToken() ?>'
-                },
-                dataType: 'json',
-                success: function(res) {
-                    if (res.success && res.account_name) {
-                        $('#ext_account_name').val(res.account_name);
-                        showExtAccountAlert('success', 'Account verified: ' + res.account_name);
-                    } else {
-                        $('#ext_account_name').val('');
-                        var msg = res.message || 'Could not verify account name.';
-                        if (!msg.toLowerCase().includes('manually')) {
-                            msg += ' — You can type the account name manually.';
-                        }
-                        showExtAccountAlert('warning', msg);
-                    }
-                },
-                error: function(xhr) {
-                    $('#ext_account_name').val('');
-                    var err = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Account name verification temporarily unavailable.';
-                    if (!err.toLowerCase().includes('manually')) {
-                        err += ' — You can type the account name manually.';
-                    }
-                    showExtAccountAlert('warning', err);
-                },
-                complete: function() {
-                    $('#ext_account_name').prop('disabled', false);
-                    $('#btnSubmitExtTransfer').prop('disabled', false);
-                }
-            });
+            return;
         }
+
+        $('#ext-account-name-alert').hide().html('');
+        $('#ext_account_name').val('Resolving account name...');
+        $('#btnSubmitExtTransfer').prop('disabled', true);
+
+        $.ajax({
+            url: '<?= APP_URL ?>/api/wallet.php?action=resolve_account',
+            type: 'POST',
+            data: {
+                account_number: accountNo,
+                bank_name: bankName,
+                _csrf_token: '<?= csrfToken() ?>',
+                csrf_token: '<?= csrfToken() ?>'
+            },
+            dataType: 'json',
+            success: function(res) {
+                if (res.success && res.account_name) {
+                    $('#ext_account_name').val(res.account_name);
+                    showExtAccountAlert('success', 'Account verified: ' + res.account_name);
+                    $('#btnSubmitExtTransfer').prop('disabled', false);
+                } else {
+                    $('#ext_account_name').val('');
+                    $('#btnSubmitExtTransfer').prop('disabled', true);
+                    var msg = res.message || 'Account name could not be resolved. Please verify the account number and bank, and try again.';
+                    showExtAccountAlert('danger', msg);
+                }
+            },
+            error: function(xhr) {
+                $('#ext_account_name').val('');
+                $('#btnSubmitExtTransfer').prop('disabled', true);
+                var err = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : 'Account name could not be resolved. Please verify the account number and bank, and try again.';
+                showExtAccountAlert('danger', err);
+            },
+            complete: function() {
+                var currentVal = $('#ext_account_name').val().trim();
+                if (currentVal && currentVal !== 'Resolving account name...') {
+                    $('#btnSubmitExtTransfer').prop('disabled', false);
+                } else {
+                    $('#btnSubmitExtTransfer').prop('disabled', true);
+                }
+            }
+        });
     }
 
     // Trigger name fetch when account number hits 10 digits
     $('#ext_account_no').on('input', function() {
         var val = $(this).val().replace(/\D/g, '');
         $(this).val(val);
-        $('#ext-account-name-alert').hide();
+        $('#ext_account_name').val('');
+        $('#ext-account-name-alert').hide().html('');
+        $('#btnSubmitExtTransfer').prop('disabled', true);
         if (val.length === 10) {
             fetchExtAccountName();
         }
     });
+
+    if (!$('#ext_account_name').val().trim()) {
+        $('#btnSubmitExtTransfer').prop('disabled', true);
+    }
 });
 </script>
