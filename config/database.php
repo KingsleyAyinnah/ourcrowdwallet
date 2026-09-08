@@ -24,9 +24,9 @@ if ($user === null || $pass === null || $dbname === null) {
 
     if ($is_live) {
         // Live cPanel Default Fallbacks (if no .env is created)
-        $dbname = $dbname ?? 'your_live_database_name';
-        $user   = $user   ?? 'your_live_database_user';
-        $pass   = $pass   ?? 'your_live_database_password';
+        $dbname = $dbname ?? 'ourcoldh_ourcr';
+        $user   = $user   ?? 'ourcoldh_ourcr';
+        $pass   = $pass   ?? '8~*}Aw3S[QHQ[-e2';
     } else {
         // Localhost Default Fallbacks
         $dbname = $dbname ?? 'ourcr_online';
