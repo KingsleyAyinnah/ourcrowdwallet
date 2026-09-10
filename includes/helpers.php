@@ -6,6 +6,8 @@
 
 defined('OURCR_ONLINE') or die('Direct access not permitted.');
 
+require_once __DIR__ . '/banks.php';
+
 // ─── String Helpers ──────────────────────────────────────────────────────────
 
 /**
@@ -389,168 +391,89 @@ function hexToRgb(string $hex): string
 }
 
 /**
- * Get CBN bank code by name
+ * Get CBN / NIBSS institution code by bank name (for GAPS GetAccountInOtherBank_Enc)
  */
 function getBankCodeByName(string $bankName): string
 {
-    $map = [
-        'access bank'                               => '044',
-        'citibank'                                  => '023',
-        'ecobank'                                   => '050',
-        'fidelity bank'                             => '070',
-        'first bank'                                => '011',
-        'first bank of nigeria'                     => '011',
-        'first city monument bank'                  => '214',
-        'first city monument bank (fcmb)'           => '214',
-        'fcmb'                                      => '214',
-        'globus bank'                               => '103',
-        'guaranty trust bank'                       => '058',
-        'guaranty trust bank (gtbank)'              => '058',
-        'gtbank'                                    => '058',
-        'heritage bank'                             => '030',
-        'keystone bank'                             => '082',
-        'lotus bank'                                => '303',
-        'moniepoint'                                => '090405',
-        'moniepoint mfb'                            => '090405',
-        'moniepoint microfinance bank'              => '090405',
-        'opay'                                      => '100004',
-        'opay (digital wallet)'                     => '100004',
-        'opay digital services limited'             => '100004',
-        'paycom'                                    => '100004',
-        'optimus bank'                              => '107',
-        'palmpay'                                   => '100033',
-        'palmpay limited'                           => '100033',
-        'paragon mfb'                               => '51237',
-        'polaris bank'                              => '076',
-        'premiumtrust bank'                         => '105',
-        'providus bank'                             => '101',
-        'signature bank'                            => '106',
-        'stanbic ibtc'                              => '221',
-        'stanbic ibtc bank'                         => '221',
-        'standard chartered bank'                   => '068',
-        'sterling bank'                             => '232',
-        'suntrust bank'                             => '100',
-        'taj bank'                                  => '302',
-        'titan trust bank'                          => '102',
-        'union bank'                                => '032',
-        'union bank of nigeria'                     => '032',
-        'united bank for africa'                    => '033',
-        'united bank for africa (uba)'              => '033',
-        'uba'                                       => '033',
-        'unity bank'                                => '215',
-        'wema bank'                                 => '035',
-        'zenith bank'                               => '057',
-        'kuda bank'                                 => '090267',
-        'kuda microfinance bank'                    => '090267',
-        'rubies mfb'                                => '090175',
-        'vfd microfinance bank'                     => '090110',
-        'carbon'                                    => '100026',
-        'fairmoney mfb'                             => '090551',
-        'fairmoney microfinance bank'               => '090551'
-    ];
-
-    $key = trim(strtolower($bankName));
-    return $map[$key] ?? '';
-}
-
-/**
- * Get GTBank GAPS 9-digit Head Office sort code by bank name
- */
-function getBankSortCodeByName(string $bankName): string
-{
-    $map = [
-        'access bank'                      => '044150291',
-        'citibank'                         => '023150005',
-        'ecobank'                          => '050150010',
-        'fidelity bank'                    => '070150003',
-        'first bank'                       => '011151003',
-        'first bank of nigeria'            => '011151003',
-        'first city monument bank'         => '214150018',
-        'first city monument bank (fcmb)'  => '214150018',
-        'fcmb'                             => '214150018',
-        'globus bank'                      => '103150103',
-        'guaranty trust bank'              => '058152052',
-        'guaranty trust bank (gtbank)'     => '058152052',
-        'gtbank'                           => '058152052',
-        'heritage bank'                    => '030150014',
-        'keystone bank'                    => '082150017',
-        'kuda bank'                        => '090267001',
-        'kuda microfinance bank'           => '090267001',
-        '090267'                           => '090267001',
-        'lotus bank'                       => '303150303',
-        '303'                              => '303150303',
-        'moniepoint'                       => '090405001',
-        'moniepoint mfb'                   => '090405001',
-        'moniepoint microfinance bank'     => '090405001',
-        '090405'                           => '090405001',
-        'opay'                             => '305150305',
-        'opay (digital wallet)'            => '305150305',
-        'opay digital services limited'    => '305150305',
-        'paycom'                           => '305150305',
-        '100004'                           => '305150305',
-        '305'                              => '305150305',
-        'optimus bank'                     => '028150028',
-        'palmpay'                          => '100033001',
-        'palmpay limited'                  => '100033001',
-        '100033'                           => '100033001',
-        'paragon mfb'                      => '090393001',
-        'polaris bank'                     => '076151365',
-        'premiumtrust bank'                => '105150105',
-        'providus bank'                    => '101152019',
-        'signature bank'                   => '106150106',
-        'stanbic ibtc'                     => '221159522',
-        'stanbic ibtc bank'                => '221159522',
-        'standard chartered bank'          => '068150015',
-        'sterling bank'                    => '232150016',
-        'suntrust bank'                    => '100152049',
-        'taj bank'                         => '302150302',
-        'titan trust bank'                 => '102150102',
-        'union bank'                       => '032154568',
-        'union bank of nigeria'            => '032154568',
-        'united bank for africa'           => '033152048',
-        'united bank for africa (uba)'     => '033152048',
-        'uba'                              => '033152048',
-        'unity bank'                       => '215082334',
-        'vfd microfinance bank'            => '090110001',
-        '090110'                           => '090110001',
-        'wema bank'                        => '035150103',
-        'zenith bank'                      => '057150013',
-        'carbon'                           => '100026001',
-        '100026'                           => '100026001',
-        'fairmoney mfb'                    => '090551001',
-        'fairmoney microfinance bank'      => '090551001',
-        '090551'                           => '090551001',
-        'rubies mfb'                       => '090175001',
-        '090175'                           => '090175001',
-    ];
-
-    $key = trim(strtolower($bankName));
-    if (isset($map[$key])) {
-        return $map[$key];
-    }
-
-    $clean = preg_replace('/[^a-z0-9]/', '', $key);
-    foreach ($map as $k => $sort) {
-        if (preg_replace('/[^a-z0-9]/', '', $k) === $clean) {
-            return $sort;
+    static $lookup = null;
+    if ($lookup === null) {
+        $lookup = [];
+        if (function_exists('getAllSupportedBanks')) {
+            foreach (getAllSupportedBanks() as $b) {
+                $code = (string) $b['cbn_code'];
+                $lookup[strtolower(trim($b['name']))] = $code;
+                $lookup[preg_replace('/[^a-z0-9]/', '', strtolower($b['name']))] = $code;
+                if (!empty($b['aliases'])) {
+                    foreach ($b['aliases'] as $alias) {
+                        $lookup[strtolower(trim($alias))] = $code;
+                        $lookup[preg_replace('/[^a-z0-9]/', '', strtolower($alias))] = $code;
+                    }
+                }
+            }
         }
     }
 
+    $clean = strtolower(trim($bankName));
+    if (isset($lookup[$clean])) {
+        return $lookup[$clean];
+    }
+
+    $stripped = preg_replace('/[^a-z0-9]/', '', $clean);
+    if (isset($lookup[$stripped])) {
+        return $lookup[$stripped];
+    }
+
+    // Direct code pass-through if numeric (3 or 6 digits)
+    if (ctype_digit($clean) && (strlen($clean) === 3 || strlen($clean) === 6)) {
+        return $clean;
+    }
+
+    return '';
+}
+
+/**
+ * Get GTBank GAPS 9-digit Head Office sort code by bank name (for GAPS SingleTransfers_Enc)
+ */
+function getBankSortCodeByName(string $bankName): string
+{
+    static $lookup = null;
+    if ($lookup === null) {
+        $lookup = [];
+        if (function_exists('getAllSupportedBanks')) {
+            foreach (getAllSupportedBanks() as $b) {
+                $sort = (string) $b['sort_code'];
+                $lookup[strtolower(trim($b['name']))] = $sort;
+                $lookup[preg_replace('/[^a-z0-9]/', '', strtolower($b['name']))] = $sort;
+                $lookup[(string) $b['cbn_code']] = $sort;
+                if (!empty($b['aliases'])) {
+                    foreach ($b['aliases'] as $alias) {
+                        $lookup[strtolower(trim($alias))] = $sort;
+                        $lookup[preg_replace('/[^a-z0-9]/', '', strtolower($alias))] = $sort;
+                    }
+                }
+            }
+        }
+    }
+
+    $clean = strtolower(trim($bankName));
+    if (isset($lookup[$clean])) {
+        return $lookup[$clean];
+    }
+
+    $stripped = preg_replace('/[^a-z0-9]/', '', $clean);
+    if (isset($lookup[$stripped])) {
+        return $lookup[$stripped];
+    }
+
+    // If already a valid 9-digit sort code
     if (strlen($bankName) === 9 && ctype_digit($bankName)) {
         return $bankName;
     }
 
+    // Fallback via CBN code
     $cbn = getBankCodeByName($bankName);
-    if (empty($cbn) && ctype_digit($bankName)) {
-        $cbn = $bankName;
-    }
-
-    if (!empty($cbn) && isset($map[$cbn])) {
-        return $map[$cbn];
-    }
-
-    if (strlen($cbn) === 9 && ctype_digit($cbn)) {
-        return $cbn;
+    if (!empty($cbn) && isset($lookup[$cbn])) {
+        return $lookup[$cbn];
     }
 
     if (strlen($cbn) === 6 && ctype_digit($cbn)) {

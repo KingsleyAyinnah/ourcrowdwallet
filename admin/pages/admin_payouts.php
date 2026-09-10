@@ -585,41 +585,9 @@ include ADMIN_PATH . '/includes/header.php';
                                     <div id="extBankDropdownPanel" style="display:none; position:absolute; z-index:9999; background:#fff; border:1px solid #ced4da; border-radius:12px; box-shadow:0 8px 24px rgba(0,0,0,0.12); padding:12px; width:100%; max-height:280px; overflow:hidden; margin-top:2px;">
                                         <input type="text" id="extBankSearchInput" class="form-control mb-2" placeholder="Type to search..." autocomplete="off" style="border-radius:8px;">
                                         <div id="extBankListQueue" style="max-height:200px; overflow-y:auto;">
-                                            <div class="bank-option ext-bank-option" data-value="Access Bank">Access Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Carbon">Carbon</div>
-                                            <div class="bank-option ext-bank-option" data-value="Citibank">Citibank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Ecobank">Ecobank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Fairmoney MFB">Fairmoney MFB</div>
-                                            <div class="bank-option ext-bank-option" data-value="Fidelity Bank">Fidelity Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="First Bank of Nigeria">First Bank of Nigeria</div>
-                                            <div class="bank-option ext-bank-option" data-value="First City Monument Bank (FCMB)">First City Monument Bank (FCMB)</div>
-                                            <div class="bank-option ext-bank-option" data-value="Globus Bank">Globus Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Guaranty Trust Bank (GTBank)">Guaranty Trust Bank (GTBank)</div>
-                                            <div class="bank-option ext-bank-option" data-value="Heritage Bank">Heritage Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Keystone Bank">Keystone Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Kuda Microfinance Bank">Kuda Microfinance Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Lotus Bank">Lotus Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Moniepoint MFB">Moniepoint MFB</div>
-                                            <div class="bank-option ext-bank-option" data-value="OPay (Digital Wallet)">OPay (Digital Wallet)</div>
-                                            <div class="bank-option ext-bank-option" data-value="OPTIMUS Bank">OPTIMUS Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="PalmPay">PalmPay</div>
-                                            <div class="bank-option ext-bank-option" data-value="Paragon MFB">Paragon MFB</div>
-                                            <div class="bank-option ext-bank-option" data-value="PremiumTrust Bank">PremiumTrust Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Providus Bank">Providus Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Rubies MFB">Rubies MFB</div>
-                                            <div class="bank-option ext-bank-option" data-value="Signature Bank">Signature Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Stanbic IBTC Bank">Stanbic IBTC Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Standard Chartered Bank">Standard Chartered Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Sterling Bank">Sterling Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="SunTrust Bank">SunTrust Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Taj Bank">Taj Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Titan Trust Bank">Titan Trust Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Union Bank of Nigeria">Union Bank of Nigeria</div>
-                                            <div class="bank-option ext-bank-option" data-value="United Bank for Africa (UBA)">United Bank for Africa (UBA)</div>
-                                            <div class="bank-option ext-bank-option" data-value="Unity Bank">Unity Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="VFD Microfinance Bank">VFD Microfinance Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Wema Bank">Wema Bank</div>
-                                            <div class="bank-option ext-bank-option" data-value="Zenith Bank">Zenith Bank</div>
+                                            <?php foreach (getAllSupportedBanks() as $b): ?>
+                                            <div class="bank-option ext-bank-option" data-value="<?= e($b['name']) ?>"><?= e($b['name']) ?></div>
+                                            <?php endforeach; ?>
                                         </div>
                                     </div>
                                     <input type="hidden" name="ext_bank_name" id="selected_ext_bank_name" value="" required>
