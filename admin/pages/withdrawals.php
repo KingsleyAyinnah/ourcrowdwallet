@@ -40,7 +40,8 @@ if (isPost()) {
                         $bankCode,
                         (float)$w['amount'],
                         $w['uuid'],
-                        'OURCR payout'
+                        'OURCR payout',
+                        $w['bank_name']
                     );
 
                     if ($gapsResult['success']) {

@@ -474,19 +474,30 @@ function getBankSortCodeByName(string $bankName): string
         'gtbank'                           => '058152052',
         'heritage bank'                    => '030150014',
         'keystone bank'                    => '082150017',
-        'kuda bank'                        => '090150267',
-        'kuda microfinance bank'           => '090150267',
-        'lotus bank'                       => '302150302',
-        'moniepoint'                       => '120150120',
-        'moniepoint mfb'                   => '120150120',
+        'kuda bank'                        => '090267001',
+        'kuda microfinance bank'           => '090267001',
+        '090267'                           => '090267001',
+        'lotus bank'                       => '303150303',
+        '303'                              => '303150303',
+        'moniepoint'                       => '090405001',
+        'moniepoint mfb'                   => '090405001',
+        'moniepoint microfinance bank'     => '090405001',
+        '090405'                           => '090405001',
         'opay'                             => '305150305',
         'opay (digital wallet)'            => '305150305',
+        'opay digital services limited'    => '305150305',
+        'paycom'                           => '305150305',
+        '100004'                           => '305150305',
+        '305'                              => '305150305',
         'optimus bank'                     => '028150028',
-        'palmpay'                          => '999150999',
-        'paragon mfb'                      => '905150430',
-        'premiumtrust bank'                => '106150106',
+        'palmpay'                          => '100033001',
+        'palmpay limited'                  => '100033001',
+        '100033'                           => '100033001',
+        'paragon mfb'                      => '090393001',
+        'polaris bank'                     => '076151365',
+        'premiumtrust bank'                => '105150105',
         'providus bank'                    => '101152019',
-        'signature bank'                   => '029150029',
+        'signature bank'                   => '106150106',
         'stanbic ibtc'                     => '221159522',
         'stanbic ibtc bank'                => '221159522',
         'standard chartered bank'          => '068150015',
@@ -500,23 +511,57 @@ function getBankSortCodeByName(string $bankName): string
         'united bank for africa (uba)'     => '033152048',
         'uba'                              => '033152048',
         'unity bank'                       => '215082334',
-        'vfd microfinance bank'            => '090150110',
+        'vfd microfinance bank'            => '090110001',
+        '090110'                           => '090110001',
         'wema bank'                        => '035150103',
         'zenith bank'                      => '057150013',
-        'carbon'                           => '090150267',
-        'fairmoney mfb'                    => '090150551',
+        'carbon'                           => '100026001',
+        '100026'                           => '100026001',
+        'fairmoney mfb'                    => '090551001',
+        'fairmoney microfinance bank'      => '090551001',
+        '090551'                           => '090551001',
+        'rubies mfb'                       => '090175001',
+        '090175'                           => '090175001',
     ];
 
     $key = trim(strtolower($bankName));
     if (isset($map[$key])) {
         return $map[$key];
     }
+
+    $clean = preg_replace('/[^a-z0-9]/', '', $key);
+    foreach ($map as $k => $sort) {
+        if (preg_replace('/[^a-z0-9]/', '', $k) === $clean) {
+            return $sort;
+        }
+    }
+
+    if (strlen($bankName) === 9 && ctype_digit($bankName)) {
+        return $bankName;
+    }
+
     $cbn = getBankCodeByName($bankName);
-    if (strlen($cbn) === 9) {
+    if (empty($cbn) && ctype_digit($bankName)) {
+        $cbn = $bankName;
+    }
+
+    if (!empty($cbn) && isset($map[$cbn])) {
+        return $map[$cbn];
+    }
+
+    if (strlen($cbn) === 9 && ctype_digit($cbn)) {
         return $cbn;
     }
-    $prefix = str_pad(substr($cbn, 0, 3), 3, '0', STR_PAD_LEFT);
-    return $prefix . '150' . $prefix;
+
+    if (strlen($cbn) === 6 && ctype_digit($cbn)) {
+        return $cbn . '001';
+    }
+
+    if (strlen($cbn) === 3 && ctype_digit($cbn)) {
+        return $cbn . '150' . $cbn;
+    }
+
+    return '058152052';
 }
 
 /**

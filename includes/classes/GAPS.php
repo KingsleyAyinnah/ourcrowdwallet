@@ -209,12 +209,16 @@ class GAPS
         $channel        = self::getChannel();
         $narration      = $narration ?: 'Withdrawal via ' . APP_NAME;
         $paymentDate    = date('Y-m-d');
-        $cbnBankCode = (!empty($bankCode) && is_numeric($bankCode)) ? $bankCode : getBankCodeByName($bankName);
-        if (empty($cbnBankCode)) {
-            $cbnBankCode = getBankCodeByName($bankName);
+        // Resolve strict 9-digit Vendor Bank Sort Code
+        $vendorSortCode = '';
+        if (!empty($bankName)) {
+            $vendorSortCode = getBankSortCodeByName($bankName);
         }
-        if (empty($cbnBankCode)) {
-            $cbnBankCode = '058';
+        if (empty($vendorSortCode) && !empty($bankCode)) {
+            $vendorSortCode = getBankSortCodeByName($bankCode);
+        }
+        if (empty($vendorSortCode) || strlen($vendorSortCode) !== 9) {
+            $vendorSortCode = '058152052';
         }
 
         $cleanVendorName = preg_replace('/[^A-Za-z0-9 ]/', '', strtoupper(trim($accountName)));
@@ -230,7 +234,7 @@ class GAPS
             "<vendorcode>12345</vendorcode>" .
             "<vendorname>" . htmlspecialchars($cleanVendorName, ENT_XML1) . "</vendorname>" .
             "<vendoracctnumber>{$encVendorAcct}</vendoracctnumber>" .
-            "<vendorbankcode>{$cbnBankCode}</vendorbankcode>" .
+            "<vendorbankcode>{$vendorSortCode}</vendorbankcode>" .
             "<customeracctnumber>{$encCustomerAcct}</customeracctnumber>" .
             "</transaction>";
 

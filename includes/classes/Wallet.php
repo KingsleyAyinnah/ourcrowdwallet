@@ -471,7 +471,8 @@ class Wallet
 
             // Attempt automated transfer using GAPS withdrawal API client
             $bankCode = getBankCodeByName($bankName);
-            if ($bankCode === '') {
+            $sortCode = getBankSortCodeByName($bankName);
+            if (empty($bankCode) && empty($sortCode)) {
                 throw new \RuntimeException('Selected bank is currently unsupported for automated GAPS payouts.');
             }
 
@@ -479,7 +480,7 @@ class Wallet
             $gapsResult = \Ourcr\GAPS\GAPS::processWithdrawal(
                 accountNumber: $accountNumber,
                 accountName:   $accountName,
-                bankCode:      $bankCode,
+                bankCode:      $sortCode ?: $bankCode,
                 amount:        $amount,
                 reference:     $reference,
                 narration:     'Automated withdrawal payout',
