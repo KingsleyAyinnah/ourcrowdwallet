@@ -247,6 +247,17 @@ class GAPS
 <password>{$encPass}</password>
 <channel>{$channel}</channel>";
 
+
+        writeLog(LOG_CHAN_GAPS, 'info', 'Sending GAPS SingleTransfers_Enc', [
+            'reference'       => $reference,
+            'bank_name'       => $bankName,
+            'bank_code'       => $bankCode,
+            'vendor_sort_code'=> $vendorSortCode,
+            'vendor_account'  => $accountNumber,
+            'amount'          => $amount,
+            'endpoint'        => self::resolveBaseUrl(),
+        ]);
+
         $response = self::sendXmlRequest($xmlPayload, 'SingleTransfers_Enc', 60, 1);
 
         if ($response['success']) {
@@ -256,6 +267,14 @@ class GAPS
             
             $success = in_array($code, ['00', '0', '000', '1000', 'SUCCESS', 'PROCESSED'], true);
 
+            writeLog(LOG_CHAN_GAPS, 'info', 'GAPS SingleTransfers_Enc response parsed', [
+                'reference'   => $reference,
+                'parsed_code' => $code,
+                'parsed_msg'  => $msg,
+                'success'     => $success,
+                'raw_snippet' => substr($response['raw'] ?? '', 0, 500),
+            ]);
+
             $response['success'] = $success;
             $response['message'] = $msg;
             $response['code']    = $code;
@@ -264,6 +283,7 @@ class GAPS
             writeLog(LOG_CHAN_WALLET, 'error', 'GAPS SingleTransfers_Enc HTTP/SOAP request failed', [
                 'reference' => $reference,
                 'error'     => $response['message'] ?? 'Unknown transfer error',
+                'raw'       => substr($response['raw'] ?? '', 0, 300),
             ]);
         }
 

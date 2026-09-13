@@ -6,7 +6,7 @@
 
 defined('OURCR_ONLINE') or die('Direct access not permitted.');
 
-require_once __DIR__ . '/banks.php';
+// Note: banks.php is loaded via config/config.php → config/banks.php before helpers.php is ever included.
 
 // ─── String Helpers ──────────────────────────────────────────────────────────
 
