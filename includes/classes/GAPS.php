@@ -209,16 +209,23 @@ class GAPS
         $channel        = self::getChannel();
         $narration      = $narration ?: 'Withdrawal via ' . APP_NAME;
         $paymentDate    = date('Y-m-d');
-        // Resolve strict 9-digit Vendor Bank Sort Code
+        // Resolve GAPS VendorBankCode from official bank list
+        // GAPS uses the raw bank code (3-digit for commercial banks, 6-digit for MFBs/FinTechs)
+        // NOT a 9-digit sort code
         $vendorSortCode = '';
         if (!empty($bankName)) {
             $vendorSortCode = getBankSortCodeByName($bankName);
         }
         if (empty($vendorSortCode) && !empty($bankCode)) {
             $vendorSortCode = getBankSortCodeByName($bankCode);
+            // bankCode itself might be the raw GAPS code already
+            if (empty($vendorSortCode)) {
+                $vendorSortCode = $bankCode;
+            }
         }
-        if (empty($vendorSortCode) || strlen($vendorSortCode) !== 9) {
-            $vendorSortCode = '058152052';
+        if (empty($vendorSortCode)) {
+            // Final fallback: GTBank own code (should rarely happen with 785-bank registry)
+            $vendorSortCode = '058';
         }
 
         $cleanVendorName = preg_replace('/[^A-Za-z0-9 ]/', '', strtoupper(trim($accountName)));
