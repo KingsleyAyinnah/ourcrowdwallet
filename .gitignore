@@ -1,5 +1,5 @@
 # Environment & local credentials
-config/config.php
+config/database.php
 config/gaps.php
 config/mail.php
 config/vtpass.php
