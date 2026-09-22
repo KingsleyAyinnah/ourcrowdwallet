@@ -5,6 +5,7 @@
 
 defined('OURCR_ONLINE') or die('Direct access not permitted.');
 requireAdmin();
+require_once INCLUDES_PATH . '/banks.php';
 
 // AJAX User Lookup for Internal Transfer
 if (get('action') === 'lookup_user') {

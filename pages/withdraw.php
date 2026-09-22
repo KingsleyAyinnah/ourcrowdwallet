@@ -5,6 +5,7 @@
 
 defined('OURCR_ONLINE') or die('Direct access not permitted.');
 requireAuth();
+require_once INCLUDES_PATH . '/banks.php';
 
 $pageTitle = 'Withdraw Funds';
 $user = currentUser();
@@ -423,7 +424,7 @@ $(document).ready(function() {
         $('#btnSubmitWithdrawal').prop('disabled', true);
 
         $.ajax({
-            url: 'api/wallet.php?action=resolve_account',
+            url: '<?= APP_URL ?>/api/wallet.php?action=resolve_account',
             type: 'POST',
             data: {
                 account_number: accountNo,

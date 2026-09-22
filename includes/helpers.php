@@ -6,7 +6,7 @@
 
 defined('OURCR_ONLINE') or die('Direct access not permitted.');
 
-// Note: banks.php is loaded via config/config.php → config/banks.php before helpers.php is ever included.
+require_once __DIR__ . '/banks.php';
 
 // ─── String Helpers ──────────────────────────────────────────────────────────
 
@@ -465,8 +465,8 @@ function getBankSortCodeByName(string $bankName): string
         return $lookup[$stripped];
     }
 
-    // If already a valid 9-digit sort code
-    if (strlen($bankName) === 9 && ctype_digit($bankName)) {
+    // If already a valid bank code (3-digit commercial, 6-digit MFB, or legacy 9-digit)
+    if (ctype_digit($bankName) && (strlen($bankName) === 3 || strlen($bankName) === 6 || strlen($bankName) === 9)) {
         return $bankName;
     }
 
@@ -476,15 +476,11 @@ function getBankSortCodeByName(string $bankName): string
         return $lookup[$cbn];
     }
 
-    if (strlen($cbn) === 6 && ctype_digit($cbn)) {
-        return $cbn . '001';
+    if (!empty($cbn) && ctype_digit($cbn)) {
+        return $cbn;
     }
 
-    if (strlen($cbn) === 3 && ctype_digit($cbn)) {
-        return $cbn . '150' . $cbn;
-    }
-
-    return '058152052';
+    return '058';
 }
 
 /**

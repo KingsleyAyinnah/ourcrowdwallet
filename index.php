@@ -17,6 +17,7 @@ require_once CONFIG_PATH . '/routes.php';
 // Load pagination helper
 require_once INCLUDES_PATH . '/pagination.php';
 require_once INCLUDES_PATH . '/alerts.php';
+require_once INCLUDES_PATH . '/banks.php';
 
 // ─── Get requested page ───────────────────────────────────────────────────────
 $page = '';

@@ -11,6 +11,7 @@ ob_start();
 require_once dirname(__DIR__) . '/config/config.php';
 require_once INCLUDES_PATH . '/pagination.php';
 require_once INCLUDES_PATH . '/alerts.php';
+require_once INCLUDES_PATH . '/banks.php';
 
 // Admin route map
 $adminRoutes = [
