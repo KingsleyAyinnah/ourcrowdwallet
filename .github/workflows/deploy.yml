@@ -1,4 +1,4 @@
-﻿name: Deploy to cPanel
+name: Deploy to cPanel
 
 on:
   push:
@@ -44,6 +44,7 @@ jobs:
             scratch/**
             .env
             config/config.php
+            config/database.php
             config/gaps.php
             config/mail.php
             config/vtpass.php
