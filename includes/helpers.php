@@ -401,12 +401,28 @@ function getBankCodeByName(string $bankName): string
         if (function_exists('getAllSupportedBanks')) {
             foreach (getAllSupportedBanks() as $b) {
                 $code = (string) $b['cbn_code'];
-                $lookup[strtolower(trim($b['name']))] = $code;
-                $lookup[preg_replace('/[^a-z0-9]/', '', strtolower($b['name']))] = $code;
+                $variants = [$b['name']];
                 if (!empty($b['aliases'])) {
-                    foreach ($b['aliases'] as $alias) {
-                        $lookup[strtolower(trim($alias))] = $code;
-                        $lookup[preg_replace('/[^a-z0-9]/', '', strtolower($alias))] = $code;
+                    $variants = array_merge($variants, $b['aliases']);
+                }
+
+                foreach ($variants as $v) {
+                    $vLower = strtolower(trim((string)$v));
+                    if ($vLower === '') continue;
+
+                    $lookup[$vLower] = $code;
+                    $lookup[preg_replace('/[^a-z0-9]/', '', $vLower)] = $code;
+
+                    // Automatically generate MFB <-> Microfinance Bank variations
+                    if (str_contains($vLower, 'mfb')) {
+                        $expanded = str_replace('mfb', 'microfinance bank', $vLower);
+                        $lookup[$expanded] = $code;
+                        $lookup[preg_replace('/[^a-z0-9]/', '', $expanded)] = $code;
+                    }
+                    if (str_contains($vLower, 'microfinance bank')) {
+                        $contracted = str_replace('microfinance bank', 'mfb', $vLower);
+                        $lookup[$contracted] = $code;
+                        $lookup[preg_replace('/[^a-z0-9]/', '', $contracted)] = $code;
                     }
                 }
             }
@@ -414,13 +430,33 @@ function getBankCodeByName(string $bankName): string
     }
 
     $clean = strtolower(trim($bankName));
+    if ($clean === '') {
+        return '';
+    }
+
+    // Direct match
     if (isset($lookup[$clean])) {
         return $lookup[$clean];
     }
 
+    // Alphanumeric only match
     $stripped = preg_replace('/[^a-z0-9]/', '', $clean);
     if (isset($lookup[$stripped])) {
         return $lookup[$stripped];
+    }
+
+    // Normalized match: replace "microfinance bank" -> "mfb", remove corporate suffixes
+    $normalized = preg_replace('/\bmicro\s*finance\s*bank\b/i', 'mfb', $clean);
+    $normalized = preg_replace('/\b(plc|limited|ltd|bank)\b/i', '', $normalized);
+    $normalized = trim(preg_replace('/\s+/', ' ', $normalized));
+
+    if (isset($lookup[$normalized])) {
+        return $lookup[$normalized];
+    }
+
+    $normStripped = preg_replace('/[^a-z0-9]/', '', $normalized);
+    if (isset($lookup[$normStripped])) {
+        return $lookup[$normStripped];
     }
 
     // Direct code pass-through if numeric (3 or 6 digits)
@@ -432,55 +468,22 @@ function getBankCodeByName(string $bankName): string
 }
 
 /**
- * Get GTBank GAPS 9-digit Head Office sort code by bank name (for GAPS SingleTransfers_Enc)
+ * Get GTBank GAPS Vendor Bank Code by name or code (for GAPS SingleTransfers_Enc)
  */
 function getBankSortCodeByName(string $bankName): string
 {
-    static $lookup = null;
-    if ($lookup === null) {
-        $lookup = [];
-        if (function_exists('getAllSupportedBanks')) {
-            foreach (getAllSupportedBanks() as $b) {
-                $sort = (string) $b['sort_code'];
-                $lookup[strtolower(trim($b['name']))] = $sort;
-                $lookup[preg_replace('/[^a-z0-9]/', '', strtolower($b['name']))] = $sort;
-                $lookup[(string) $b['cbn_code']] = $sort;
-                if (!empty($b['aliases'])) {
-                    foreach ($b['aliases'] as $alias) {
-                        $lookup[strtolower(trim($alias))] = $sort;
-                        $lookup[preg_replace('/[^a-z0-9]/', '', strtolower($alias))] = $sort;
-                    }
-                }
-            }
-        }
+    $clean = trim($bankName);
+    if ($clean === '') {
+        return '';
     }
 
-    $clean = strtolower(trim($bankName));
-    if (isset($lookup[$clean])) {
-        return $lookup[$clean];
+    // If already a valid numeric bank code (3-digit commercial, 6-digit MFB, or legacy 9-digit)
+    if (ctype_digit($clean) && (strlen($clean) === 3 || strlen($clean) === 6 || strlen($clean) === 9)) {
+        return $clean;
     }
 
-    $stripped = preg_replace('/[^a-z0-9]/', '', $clean);
-    if (isset($lookup[$stripped])) {
-        return $lookup[$stripped];
-    }
-
-    // If already a valid bank code (3-digit commercial, 6-digit MFB, or legacy 9-digit)
-    if (ctype_digit($bankName) && (strlen($bankName) === 3 || strlen($bankName) === 6 || strlen($bankName) === 9)) {
-        return $bankName;
-    }
-
-    // Fallback via CBN code
-    $cbn = getBankCodeByName($bankName);
-    if (!empty($cbn) && isset($lookup[$cbn])) {
-        return $lookup[$cbn];
-    }
-
-    if (!empty($cbn) && ctype_digit($cbn)) {
-        return $cbn;
-    }
-
-    return '058';
+    // Resolve via unified bank code lookup (returns raw GAPS vendor code)
+    return getBankCodeByName($clean);
 }
 
 /**

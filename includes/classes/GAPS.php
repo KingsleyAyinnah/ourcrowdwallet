@@ -211,20 +211,25 @@ class GAPS
         $paymentDate    = date('Y-m-d');
         // Resolve GAPS VendorBankCode from official bank list
         // GAPS uses the raw bank code (3-digit for commercial banks, 6-digit for MFBs/FinTechs)
-        // NOT a 9-digit sort code
         $vendorSortCode = '';
-        if (!empty($bankName)) {
+
+        // 1. If bankCode is already a valid 3-digit or 6-digit numeric GAPS code, use it directly
+        if (!empty($bankCode) && ctype_digit($bankCode) && (strlen($bankCode) === 3 || strlen($bankCode) === 6)) {
+            $vendorSortCode = $bankCode;
+        }
+
+        // 2. Otherwise resolve from bankName
+        if (empty($vendorSortCode) && !empty($bankName)) {
             $vendorSortCode = getBankSortCodeByName($bankName);
         }
+
+        // 3. Otherwise try resolving bankCode if it was passed as a name/alias
         if (empty($vendorSortCode) && !empty($bankCode)) {
             $vendorSortCode = getBankSortCodeByName($bankCode);
-            // bankCode itself might be the raw GAPS code already
-            if (empty($vendorSortCode)) {
-                $vendorSortCode = $bankCode;
-            }
         }
+
+        // 4. Final fallback only if unresolved
         if (empty($vendorSortCode)) {
-            // Final fallback: GTBank own code (should rarely happen with 785-bank registry)
             $vendorSortCode = '058';
         }
 
